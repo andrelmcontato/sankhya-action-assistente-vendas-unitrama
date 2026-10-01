@@ -104,12 +104,12 @@
     z-index: 1032;
     display: inline-flex;
     align-items: center;
-    gap: 12px;
+    gap: 14px;
     background: linear-gradient(135deg, #ecfdf5 0%, #dcfce7 100%);
-    border: 1.5px solid #a7f3d0;
+    border: 2px solid #a7f3d0;
     border-radius: 9999px;
-    padding: 8px 18px 8px 12px;
-    box-shadow: 0 6px 22px rgba(16, 185, 129, 0.28), 0 2px 8px rgba(0, 0, 0, 0.06);
+    padding: 10px 22px 10px 14px;
+    box-shadow: 0 8px 26px rgba(16, 185, 129, 0.32), 0 3px 10px rgba(0, 0, 0, 0.07);
     cursor: pointer;
     transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, opacity 0.3s ease;
     animation: asstSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
@@ -117,14 +117,14 @@
 
 .asst-balloon:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 28px rgba(16, 185, 129, 0.38), 0 3px 10px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 10px 32px rgba(16, 185, 129, 0.42), 0 4px 12px rgba(0, 0, 0, 0.09);
     background: #e6fcf0;
 }
 
 .asst-balloon.asst-dragging {
     opacity: 0.92;
     cursor: grabbing;
-    box-shadow: 0 12px 36px rgba(16, 185, 129, 0.45);
+    box-shadow: 0 14px 40px rgba(16, 185, 129, 0.48);
     transition: none;
 }
 
@@ -149,14 +149,14 @@
 
 /* Ícone Circular Avatar Unitrama */
 .asst-balloon-icon {
-    width: 44px;
-    height: 44px;
+    width: 54px;
+    height: 54px;
     border-radius: 50%;
     background: transparent;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 3px 10px rgba(0, 115, 72, 0.35);
+    box-shadow: 0 4px 12px rgba(0, 115, 72, 0.35);
     flex-shrink: 0;
     overflow: hidden;
 }
@@ -177,14 +177,14 @@
 }
 
 .asst-balloon-title {
-    font-size: 14.5px;
+    font-size: 16.5px;
     font-weight: 750;
     color: #065f46;
     line-height: 1.25;
 }
 
 .asst-balloon-subtitle {
-    font-size: 12.5px;
+    font-size: 14px;
     font-weight: 600;
     color: #047857;
     margin-top: 2px;
@@ -199,9 +199,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 6px;
+    padding: 7px;
     border-radius: 50%;
-    margin-left: 2px;
+    margin-left: 4px;
     cursor: pointer;
     transition: all 0.15s ease;
 }
@@ -214,7 +214,7 @@
 
 
 /* ==========================================================================
-   3. Painel Lateral Deslizante (Slide-over Drawer BIA Agents)
+   3. Painel Lateral Deslizante (Slide-over Drawer Unitrama)
    100% NÃO-BLOQUEANTE: sem backdrop, permitindo interação com o ERP
    ========================================================================== */
 .asst-drawer {
