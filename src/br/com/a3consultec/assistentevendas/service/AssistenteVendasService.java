@@ -159,7 +159,7 @@ public class AssistenteVendasService {
             inClause.append(itensCarrinho.get(i).toPlainString());
         }
 
-        // Query ultra-otimizada com CTEs e Resolução Precisa de Preço por Parceiro (Edeltec)
+        // Query ultra-otimizada com CTEs e Resolução Precisa de Preço por Parceiro (Unitrama)
         String sql = "WITH REGRAS_CANDIDATAS AS ( "
                    + "    SELECT R.CODPROD_B, MAX(R.LIFT_A_B) AS MAX_LIFT, MAX(R.CONFIDENCE_A_B) AS MAX_CONF, "
                    + "           MAX(R.HINT_TEXTO) AS HINT_TEXTO, MAX(R.TIPO_EXPLICACAO) AS TIPO_EXPLICACAO "

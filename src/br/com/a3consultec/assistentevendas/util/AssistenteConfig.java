@@ -12,7 +12,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Utilitário central de configurações e parâmetros do Assistente de Vendas (Edeltec Agents).
+ * Utilitário central de configurações e parâmetros do Assistente de Vendas (Unitrama).
  * Realiza a leitura dinâmica dos parâmetros na tabela nativa TSIPAR do Sankhya,
  * com cache em memória (TTL: 60s) para garantir tempo de resposta ultrarrápido (< 1ms).
  * 

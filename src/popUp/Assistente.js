@@ -611,7 +611,7 @@
         }
     });
 
-    // Toggle da Caixa de Ajuda Explicativa da Edeltec Agents
+    // Toggle da Caixa de Ajuda Explicativa da Unitrama
     exp("asstToggleAjuda", function () {
         var help = document.getElementById("asst-help-box");
         if (help) {
