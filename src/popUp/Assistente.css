@@ -1,0 +1,733 @@
+/* ==========================================================================
+   Assistente de Vendas - BIA Agents (Oficial Sankhya)
+   Estilos 100% fiéis aos prints oficiais da Central de Vendas
+   ========================================================================== */
+
+.asst-root {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    user-select: none;
+    -webkit-font-smoothing: antialiased;
+}
+
+.asst-root * {
+    box-sizing: border-box;
+}
+
+/* Neutralização não-bloqueante do modal host do Sankhya */
+.asst-modal-host,
+.modal:has(.asst-root),
+.modal:has(#assistente-root) {
+    pointer-events: none !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+.asst-modal-host .modal-dialog,
+.modal:has(.asst-root) .modal-dialog,
+.modal:has(#assistente-root) .modal-dialog {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    max-width: 100vw !important;
+    max-height: 100vh !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    pointer-events: none !important;
+    transform: none !important;
+    -webkit-transform: none !important;
+}
+
+.asst-modal-host .modal-content,
+.modal:has(.asst-root) .modal-content,
+.modal:has(#assistente-root) .modal-content {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    pointer-events: none !important;
+}
+
+.asst-modal-host .modal-header,
+.asst-modal-host .modal-footer,
+.modal:has(.asst-root) .modal-header,
+.modal:has(.asst-root) .modal-footer,
+.modal:has(#assistente-root) .modal-header,
+.modal:has(#assistente-root) .modal-footer {
+    display: none !important;
+}
+
+.asst-modal-host .modal-body,
+.modal:has(.asst-root) .modal-body,
+.modal:has(#assistente-root) .modal-body {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    pointer-events: none !important;
+    overflow: visible !important;
+}
+
+.asst-modal-backdrop-hidden,
+.modal-backdrop:has(+ .modal .asst-root),
+.modal-backdrop:has(+ .modal #assistente-root) {
+    display: none !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+
+/* ==========================================================================
+   1. O Balãozinho Flutuante (Floating Opportunity Pill)
+   Posicionado sobre a grade de itens com drag & drop livre
+   ========================================================================== */
+.asst-balloon {
+    position: fixed;
+    bottom: 95px;
+    right: 32px;
+    z-index: 1032;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: linear-gradient(135deg, #ecfdf5 0%, #dcfce7 100%);
+    border: 1px solid #a7f3d0;
+    border-radius: 9999px;
+    padding: 7px 16px 7px 10px;
+    box-shadow: 0 4px 18px rgba(16, 185, 129, 0.22), 0 2px 6px rgba(0, 0, 0, 0.04);
+    cursor: pointer;
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, opacity 0.3s ease;
+    animation: asstSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.asst-balloon:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 24px rgba(16, 185, 129, 0.32), 0 2px 8px rgba(0, 0, 0, 0.06);
+    background: #e6fcf0;
+}
+
+.asst-balloon.asst-dragging {
+    opacity: 0.9;
+    cursor: grabbing;
+    box-shadow: 0 10px 30px rgba(16, 185, 129, 0.4);
+    transition: none;
+}
+
+/* Alça de Arrasto (6 pontos ::) */
+.asst-drag-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #94a3b8;
+    cursor: grab;
+    padding: 2px 2px 2px 0;
+    transition: color 0.15s ease;
+}
+
+.asst-drag-handle:hover {
+    color: #007348;
+}
+
+.asst-drag-handle svg {
+    display: block;
+}
+
+/* Ícone Circular Verde de IA da BIA */
+.asst-balloon-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #007348;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 6px rgba(0, 115, 72, 0.35);
+    flex-shrink: 0;
+}
+
+/* Textos em Duas Linhas Oficiais */
+.asst-balloon-text {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.asst-balloon-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #065f46;
+    line-height: 1.2;
+}
+
+.asst-balloon-subtitle {
+    font-size: 11.5px;
+    font-weight: 500;
+    color: #047857;
+    margin-top: 1px;
+    line-height: 1.2;
+}
+
+/* Botão Fechar Notificação */
+.asst-balloon-close {
+    background: transparent;
+    border: none;
+    color: #6ee7b7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    border-radius: 50%;
+    margin-left: 2px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.asst-balloon-close:hover {
+    color: #065f46;
+    background: rgba(16, 185, 129, 0.15);
+}
+
+
+
+/* ==========================================================================
+   3. Painel Lateral Deslizante (Slide-over Drawer BIA Agents)
+   100% NÃO-BLOQUEANTE: sem backdrop, permitindo interação com o ERP
+   ========================================================================== */
+.asst-drawer {
+    position: fixed;
+    top: 0;
+    right: -440px;
+    width: 390px;
+    max-width: 90vw;
+    height: calc(100vh - 12px);
+    max-height: calc(100vh - 12px);
+    background: #ffffff;
+    box-shadow: -8px 6px 32px rgba(15, 23, 42, 0.18);
+    z-index: 1035;
+    display: flex;
+    flex-direction: column;
+    transition: right 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+    border-top-left-radius: 20px;
+    border-bottom-left-radius: 20px;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    overflow: hidden;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-right: none;
+}
+
+.asst-drawer.active {
+    right: 0;
+}
+
+/* Cabeçalho Verde Oficial BIA Agents / Edeltec Agents */
+.asst-drawer-header {
+    background: #007348;
+    padding: 14px 18px 14px 22px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: #ffffff;
+    flex-shrink: 0;
+    border-top-left-radius: 20px;
+    border-top-right-radius: 0;
+}
+
+.asst-drawer-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.asst-drawer-header-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: 0.2px;
+}
+
+.asst-drawer-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.asst-drawer-icon-btn {
+    background: transparent;
+    border: none;
+    color: #ffffff;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.asst-drawer-icon-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+@keyframes asstSpin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.asst-spin svg {
+    animation: asstSpin 0.75s linear infinite !important;
+}
+
+/* Box de Ajuda Interativo BIA Agents */
+.asst-help-box {
+    background: #f0fdf4;
+    border-bottom: 1px solid #bbf7d0;
+    padding: 12px 18px;
+    animation: asstSlideIn 0.2s ease;
+}
+
+.asst-help-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.asst-help-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #166534;
+}
+
+.asst-help-close {
+    background: transparent;
+    border: none;
+    color: #15803d;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0 4px;
+}
+
+.asst-help-close:hover {
+    color: #052e16;
+}
+
+.asst-help-text {
+    font-size: 12px;
+    line-height: 1.45;
+    color: #15803d;
+}
+
+/* Bloco de Título das Sugestões */
+.asst-drawer-intro {
+    padding: 16px 20px 12px 20px;
+    background: #ffffff;
+    border-bottom: 1px solid #f1f5f9;
+    flex-shrink: 0;
+}
+
+.asst-intro-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.asst-intro-bia-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #007348;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.asst-intro-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #007348;
+    margin: 0;
+}
+
+.asst-intro-subtitle {
+    font-size: 13px;
+    font-weight: 600;
+    color: #334155;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 4px 0;
+}
+
+.asst-intro-desc {
+    font-size: 11.5px;
+    color: #64748b;
+    margin: 0;
+    line-height: 1.4;
+}
+
+/* Lista de Cards de Produtos */
+.asst-drawer-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 18px;
+    background: #f8fafc;
+}
+
+.asst-cards-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* ==========================================================================
+   4. Cards de Produtos Recomendados (BIA Agents)
+   ========================================================================== */
+.asst-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 12px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+    display: flex;
+    gap: 12px;
+    position: relative;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.asst-card:hover {
+    border-color: #cbd5e1;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+    transform: translateY(-1px);
+}
+
+.asst-card.asst-card-removing {
+    opacity: 0;
+    transform: scale(0.92);
+    pointer-events: none;
+    transition: all 0.25s ease;
+}
+
+/* Coluna 1: Miniatura / Foto do Produto */
+.asst-card-thumb {
+    width: 76px;
+    height: 76px;
+    border-radius: 8px;
+    background: #f8fafc;
+    border: 1px solid #f1f5f9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.asst-card-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+/* Coluna 2: Dados e Ação */
+.asst-card-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.asst-card-name {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #1e293b;
+    text-transform: uppercase;
+    line-height: 1.3;
+    margin-bottom: 2px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.asst-card-code {
+    font-size: 11px;
+    color: #64748b;
+    margin-bottom: 4px;
+}
+
+/* Linha de Precificação e Margem Unitrama (Negociação Interativa) */
+.asst-pricing-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+    margin-bottom: 8px;
+}
+
+.asst-pricing-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.asst-pricing-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: #64748b;
+    margin-bottom: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.asst-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.asst-input-prefix {
+    position: absolute;
+    left: 6px;
+    font-size: 10.5px;
+    font-weight: 700;
+    color: #64748b;
+    pointer-events: none;
+}
+
+.asst-input-suffix {
+    position: absolute;
+    right: 6px;
+    font-size: 10.5px;
+    font-weight: 700;
+    color: #64748b;
+    pointer-events: none;
+}
+
+.asst-input-preco {
+    width: 100%;
+    height: 28px;
+    padding: 2px 4px 2px 24px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #007348;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    outline: none;
+    box-sizing: border-box;
+    transition: all 0.15s ease;
+}
+
+.asst-input-preco:focus {
+    border-color: #007348;
+    box-shadow: 0 0 0 2px rgba(0, 115, 72, 0.18);
+}
+
+.asst-input-margem {
+    width: 100%;
+    height: 28px;
+    padding: 2px 18px 2px 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #0284c7;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    outline: none;
+    box-sizing: border-box;
+    transition: all 0.15s ease;
+}
+
+.asst-input-margem:focus {
+    border-color: #0284c7;
+    box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.18);
+}
+
+.asst-input-margem.asst-margem-negativa {
+    color: #dc2626 !important;
+    border-color: #fca5a5 !important;
+}
+
+/* Linha Inferior: Quantidade e Botão Adicionar */
+.asst-card-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.asst-stepper {
+    display: flex;
+    align-items: center;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    background: #ffffff;
+    overflow: hidden;
+}
+
+.asst-step-btn {
+    background: #ffffff;
+    border: none;
+    width: 24px;
+    height: 26px;
+    font-size: 13px;
+    font-weight: bold;
+    color: #64748b;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease;
+}
+
+.asst-step-btn:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+}
+
+.asst-step-input {
+    width: 28px;
+    height: 26px;
+    border: none;
+    background: transparent;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: #0f172a;
+    outline: none;
+}
+
+.asst-btn-add {
+    background: #007348;
+    color: #ffffff;
+    border: none;
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0, 115, 72, 0.25);
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.asst-btn-add:hover {
+    background: #005a36;
+    box-shadow: 0 4px 10px rgba(0, 115, 72, 0.35);
+}
+
+.asst-btn-add:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+/* ==========================================================================
+   5. Tooltip Explicativo Flutuante (Balão Azul Escuro Oficial)
+   Aparece ao passar o mouse sobre o Card com a justificativa de venda
+   ========================================================================== */
+.asst-tooltip {
+    position: absolute;
+    top: 14px;
+    right: 102%;
+    width: 220px;
+    background: #1e293b;
+    color: #ffffff;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 11.5px;
+    line-height: 1.4;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.28);
+    z-index: 1036;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateX(8px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+/* Setinha apontando para a direita em direção ao card */
+.asst-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 20px;
+    right: -6px;
+    border-width: 6px 0 6px 6px;
+    border-style: solid;
+    border-color: transparent transparent transparent #1e293b;
+}
+
+.asst-card:hover .asst-tooltip {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+/* Estado Vazio Oficial */
+.asst-drawer-empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: #64748b;
+    font-size: 13.5px;
+}
+
+/* Toast de Confirmação */
+.asst-toast {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    right: 20px;
+    background: #007348;
+    color: #ffffff;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    opacity: 0;
+    transform: translateY(10px);
+    pointer-events: none;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 1037;
+}
+
+.asst-toast.active {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+@keyframes asstSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(12px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}

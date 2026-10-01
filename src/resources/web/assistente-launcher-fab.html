@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Assistente de Vendas - Floating Action Button</title>
+    <style>
+        /* ==========================================================================
+           1. ESTILIZAÇÃO DO BOTÃO FLUTUANTE (FAB)
+           ========================================================================== */
+        #asst-fab-root {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 999999;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            user-select: none;
+        }
+
+        /* Botão Circular Flutuante Clean Light */
+        .asst-fab-btn {
+            width: 58px;
+            height: 58px;
+            border-radius: 50%;
+            background: #FFFFFF;
+            border: 2px solid #10B981;
+            box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.35), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            outline: none;
+        }
+
+        .asst-fab-btn:hover {
+            transform: scale(1.08) translateY(-2px);
+            box-shadow: 0 14px 28px -4px rgba(16, 185, 129, 0.45);
+        }
+
+        .asst-fab-btn:active {
+            transform: scale(0.95);
+        }
+
+        .asst-fab-icon {
+            color: #059669;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Badge Pulsante no Topo do Botão */
+        .asst-fab-badge {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            background: #EF4444;
+            color: #FFFFFF;
+            font-size: 11px;
+            font-weight: 800;
+            padding: 2px 7px;
+            border-radius: 20px;
+            border: 2px solid #FFFFFF;
+            box-shadow: 0 2px 6px rgba(239, 68, 68, 0.4);
+            animation: asstPulse 2s infinite;
+            display: none;
+        }
+
+        .asst-fab-badge.active {
+            display: inline-block;
+        }
+
+        @keyframes asstPulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.15); }
+            100% { transform: scale(1); }
+        }
+
+        /* ==========================================================================
+           2. GAVETA LATERAL (SLIDE-OUT DRAWER)
+           ========================================================================== */
+        .asst-drawer-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(15, 23, 42, 0.25);
+            backdrop-filter: blur(2px);
+            z-index: 999998;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .asst-drawer-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .asst-drawer {
+            position: fixed;
+            top: 0;
+            right: -480px;
+            width: 440px;
+            max-width: 90vw;
+            height: calc(100vh - 12px);
+            max-height: calc(100vh - 12px);
+            background: #FFFFFF;
+            box-shadow: -10px 6px 30px rgba(0, 0, 0, 0.12);
+            z-index: 999999;
+            transition: right 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            flex-direction: column;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            color: #1E293B;
+            box-sizing: border-box;
+            border-top-left-radius: 20px;
+            border-bottom-left-radius: 20px;
+            overflow: hidden;
+        }
+
+        .asst-drawer.open {
+            right: 0;
+        }
+
+        .asst-drawer-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 18px 20px;
+            border-bottom: 1px solid #F1F5F9;
+        }
+
+        .asst-drawer-header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .asst-avatar {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+            color: #FFFFFF;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 10px rgba(16, 185, 129, 0.25);
+        }
+
+        .asst-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #0F172A;
+            line-height: 1.2;
+        }
+
+        .asst-subtitle {
+            font-size: 12px;
+            color: #64748B;
+            margin-top: 2px;
+        }
+
+        .asst-drawer-close {
+            background: #F1F5F9;
+            border: none;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #64748B;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .asst-drawer-close:hover {
+            background: #E2E8F0;
+            color: #0F172A;
+        }
+
+        /* Tabs */
+        .asst-tabs {
+            display: flex;
+            gap: 8px;
+            margin: 14px 20px;
+            background-color: #F8FAFC;
+            padding: 4px;
+            border-radius: 10px;
+            border: 1px solid #F1F5F9;
+        }
+
+        .asst-tab {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 8px 12px;
+            border: none;
+            background: transparent;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #64748B;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .asst-tab.active {
+            background-color: #FFFFFF;
+            color: #0F172A;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+        }
+
+        .asst-tab-counter {
+            background-color: #E2E8F0;
+            color: #475569;
+            font-size: 11px;
+            padding: 1px 6px;
+            border-radius: 10px;
+            font-weight: 700;
+        }
+
+        .asst-tab.active .asst-tab-counter {
+            background-color: #ECFDF5;
+            color: #059669;
+        }
+
+        /* Scroll Content */
+        .asst-content-scroll {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0 20px 20px 20px;
+        }
+
+        .asst-card-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .asst-card {
+            background-color: #FFFFFF;
+            border: 1px solid #E2E8F0;
+            border-radius: 12px;
+            padding: 14px;
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+        }
+
+        .asst-card:hover {
+            border-color: #CBD5E1;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
+            transform: translateY(-1px);
+        }
+
+        .asst-card-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .asst-card-cod {
+            font-size: 11px;
+            font-weight: 700;
+            color: #94A3B8;
+            text-transform: uppercase;
+        }
+
+        .asst-badge-afinidade {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background-color: #ECFDF5;
+            border: 1px solid #A7F3D0;
+            color: #065F46;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 20px;
+        }
+
+        .asst-card-descr {
+            font-size: 14px;
+            font-weight: 600;
+            color: #0F172A;
+            line-height: 1.35;
+            margin-bottom: 4px;
+        }
+
+        .asst-card-motivo {
+            font-size: 11px;
+            color: #059669;
+            font-weight: 500;
+            margin-bottom: 10px;
+        }
+
+        .asst-card-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-top: 10px;
+            border-top: 1px dashed #F1F5F9;
+        }
+
+        .asst-card-price {
+            font-size: 15px;
+            font-weight: 700;
+            color: #0F172A;
+        }
+
+        .asst-card-stock {
+            font-size: 11px;
+            color: #64748B;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .asst-stock-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background-color: #10B981;
+        }
+
+        .asst-btn-add {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #059669;
+            color: #FFFFFF;
+            border: none;
+            border-radius: 8px;
+            padding: 7px 14px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .asst-btn-add:hover {
+            background: #047857;
+            box-shadow: 0 4px 10px rgba(5, 150, 105, 0.25);
+            transform: scale(1.02);
+        }
+
+        .asst-btn-add.success {
+            background: #10B981;
+        }
+
+        .asst-empty-state {
+            text-align: center;
+            padding: 48px 20px;
+        }
+
+        .asst-empty-icon {
+            font-size: 36px;
+            margin-bottom: 12px;
+        }
+
+        .asst-empty-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #334155;
+        }
+
+        .asst-empty-desc {
+            font-size: 12px;
+            color: #94A3B8;
+            margin-top: 6px;
+            line-height: 1.4;
+        }
+
+        .asst-toast {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background-color: #065F46;
+            color: #FFFFFF;
+            padding: 10px 18px;
+            border-radius: 30px;
+            font-size: 12px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 10px 20px rgba(6, 95, 70, 0.2);
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        .asst-toast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ==========================================
+         BOTÃO FLUTUANTE PERSISTENTE (FAB)
+         Flutua sobre a Central de Vendas inteira
+         ========================================== -->
+    <div id="asst-fab-root">
+        <button class="asst-fab-btn" onclick="toggleAssistenteDrawer()" title="Abrir Assistente de Vendas">
+            <div class="asst-fab-icon">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                </svg>
+            </div>
+            <span class="asst-fab-badge" id="fab-badge-count">0</span>
+        </button>
+    </div>
+
+    <!-- Backdrop Suave -->
+    <div class="asst-drawer-overlay" id="asst-overlay" onclick="toggleAssistenteDrawer()"></div>
+
+    <!-- Gaveta Retrátil Lateral -->
+    <div class="asst-drawer" id="asst-drawer">
+        <div class="asst-drawer-header">
+            <div class="asst-drawer-header-left">
+                <div class="asst-avatar">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="asst-title">Assistente de Vendas</div>
+                    <div class="asst-subtitle" id="asst-sub-info">Sugestões inteligentes em tempo real</div>
+                </div>
+            </div>
+            <button class="asst-drawer-close" onclick="toggleAssistenteDrawer()" title="Fechar">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+        </div>
+
+        <div class="asst-tabs">
+            <button class="asst-tab active" id="tab-btn-cross" onclick="asstAlternarAba('cross')">
+                <span>✨ Venda Casada (LIFT)</span>
+                <span class="asst-tab-counter" id="counter-cross">0</span>
+            </button>
+            <button class="asst-tab" id="tab-btn-recompra" onclick="asstAlternarAba('recompra')">
+                <span>🔄 Recompra Habitual</span>
+                <span class="asst-tab-counter" id="counter-recompra">0</span>
+            </button>
+        </div>
+
+        <div class="asst-content-scroll" id="aba-cross">
+            <div id="lista-sugestoes-cross" class="asst-card-list"></div>
+            <div id="empty-cross" class="asst-empty-state" style="display: none;">
+                <div class="asst-empty-icon">🛒</div>
+                <div class="asst-empty-title">Nenhuma sugestão adicional</div>
+                <div class="asst-empty-desc">Selecione um pedido ou adicione itens para ver as regras de associação.</div>
+            </div>
+        </div>
+
+        <div class="asst-content-scroll" id="aba-recompra" style="display: none;">
+            <div id="lista-sugestoes-recompra" class="asst-card-list"></div>
+            <div id="empty-recompra" class="asst-empty-state" style="display: none;">
+                <div class="asst-empty-icon">📅</div>
+                <div class="asst-empty-title">Sem histórico de recompra</div>
+                <div class="asst-empty-desc">Este parceiro não possui histórico de compras recorrentes recentes.</div>
+            </div>
+        </div>
+
+        <div id="asst-toast" class="asst-toast">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            <span id="asst-toast-text">Produto adicionado ao pedido!</span>
+        </div>
+    </div>
+
+    <!-- ==========================================
+         LÓGICA REATIVA DE CAPTURA DO PEDIDO ATIVO
+         ========================================== -->
+    <script>
+        var nuNotaAtiva = null;
+        var asstData = { sugestoes: [], itensFrequentes: [] };
+
+        // 1. Escuta contínua de mudança de pedido na Central de Vendas
+        setInterval(function verificarMudancaPedido() {
+            var nuNota = detectarNuNotaAtiva();
+            if (nuNota && nuNota !== nuNotaAtiva) {
+                nuNotaAtiva = nuNota;
+                carregarSugestoesBackend(nuNota);
+            }
+        }, 1500);
+
+        function detectarNuNotaAtiva() {
+            try {
+                // Tenta ler o dataset da grade da Central de Vendas na janela pai
+                if (window.parent && window.parent.angular) {
+                    var el = window.parent.document.querySelector('.sk-grid, [sk-grid], [sk-dataset]');
+                    if (el) {
+                        var scope = window.parent.angular.element(el).scope();
+                        if (scope && scope.dataset && scope.dataset.getSelectedRow()) {
+                            var row = scope.dataset.getSelectedRow();
+                            return row.NUNOTA || row.nuNota || (row.values ? row.values.NUNOTA : null);
+                        }
+                    }
+                }
+            } catch (e) {
+                // Ignore cross-origin se aplicável
+            }
+            // Fallback via URL
+            var params = new URLSearchParams(window.location.search);
+            return params.get("NUNOTA") || params.get("nunota");
+        }
+
+        function carregarSugestoesBackend(nuNota) {
+            console.log("[AssistenteVendas] Pedido ativo detectado:", nuNota);
+
+            // Chamada ao serviço nativo via ServiceProxy do Sankhya
+            var ServiceProxy = (window.parent && window.parent.ServiceProxy) ? window.parent.ServiceProxy : null;
+
+            var payload = {
+                javaCall: {
+                    actionID: "AssistenteVendasAction",
+                    masterEntityName: "CabecalhoNota",
+                    params: { NUNOTA: nuNota }
+                }
+            };
+
+            if (ServiceProxy && ServiceProxy.callService) {
+                ServiceProxy.callService("ActionButtonsSP.executeJava", payload).then(
+                    function (res) {
+                        // Quando retorna HTML/JSON montado
+                        if (res && res.responseBody) {
+                            processarRetornoSugestoes(res.responseBody);
+                        }
+                    }
+                );
+            }
+        }
+
+        function processarRetornoSugestoes(data) {
+            if (!data) return;
+            asstData = (typeof data === "string") ? JSON.parse(data) : data;
+            renderizarCards();
+            atualizarBadge();
+        }
+
+        function atualizarBadge() {
+            var total = (asstData.sugestoes ? asstData.sugestoes.length : 0);
+            var elBadge = document.getElementById("fab-badge-count");
+            if (elBadge) {
+                elBadge.innerText = total;
+                if (total > 0) {
+                    elBadge.classList.add("active");
+                } else {
+                    elBadge.classList.remove("active");
+                }
+            }
+        }
+
+        function toggleAssistenteDrawer() {
+            var drawer = document.getElementById("asst-drawer");
+            var overlay = document.getElementById("asst-overlay");
+            if (drawer && overlay) {
+                var isOpen = drawer.classList.contains("open");
+                if (isOpen) {
+                    drawer.classList.remove("open");
+                    overlay.classList.remove("active");
+                } else {
+                    drawer.classList.add("open");
+                    overlay.classList.add("active");
+                    // Se abriu, garante renderização
+                    renderizarCards();
+                }
+            }
+        }
+
+        function renderizarCards() {
+            var containerCross = document.getElementById("lista-sugestoes-cross");
+            var emptyCross = document.getElementById("empty-cross");
+            var counterCross = document.getElementById("counter-cross");
+
+            var lista = asstData.sugestoes || [];
+            if (counterCross) counterCross.innerText = lista.length;
+
+            if (containerCross) {
+                containerCross.innerHTML = "";
+                if (lista.length === 0) {
+                    if (emptyCross) emptyCross.style.display = "block";
+                } else {
+                    if (emptyCross) emptyCross.style.display = "none";
+                    lista.forEach(function (item) {
+                        containerCross.appendChild(criarCardElemento(item));
+                    });
+                }
+            }
+        }
+
+        function criarCardElemento(item) {
+            var card = document.createElement("div");
+            card.className = "asst-card";
+            card.id = "card-prod-" + item.codProd;
+
+            var precoFmt = "R$ " + (item.vlrVenda ? Number(item.vlrVenda).toFixed(2).replace(".", ",") : "0,00");
+            var estoque = Number(item.estoqueDisponivel || 0);
+            var estoqueTexto = estoque > 0 ? "Em estoque (" + estoque + " un)" : "Estoque baixo/zerado";
+
+            card.innerHTML = 
+                '<div class="asst-card-meta">' +
+                    '<span class="asst-card-cod">CÓD. ' + item.codProd + '</span>' +
+                    '<span class="asst-badge-afinidade">✨ ' + (item.tagAfinidade || "Recomendado") + '</span>' +
+                '</div>' +
+                '<div class="asst-card-descr">' + (item.descrProd || "") + '</div>' +
+                (item.motivo ? '<div class="asst-card-motivo">' + item.motivo + '</div>' : '') +
+                '<div class="asst-card-footer">' +
+                    '<div class="asst-price-block">' +
+                        '<span class="asst-card-price">' + precoFmt + '</span>' +
+                        '<span class="asst-card-stock"><span class="asst-stock-dot"></span>' + estoqueTexto + '</span>' +
+                    '</div>' +
+                    '<button class="asst-btn-add" onclick="adicionarAoPedido(' + item.codProd + ', this)">+ Adicionar</button>' +
+                '</div>';
+            return card;
+        }
+
+        function asstAlternarAba(aba) {
+            var abaCross = document.getElementById("aba-cross");
+            var abaRecompra = document.getElementById("aba-recompra");
+            var btnCross = document.getElementById("tab-btn-cross");
+            var btnRecompra = document.getElementById("tab-btn-recompra");
+
+            if (aba === "cross") {
+                if (abaCross) abaCross.style.display = "block";
+                if (abaRecompra) abaRecompra.style.display = "none";
+                if (btnCross) btnCross.classList.add("active");
+                if (btnRecompra) btnRecompra.classList.remove("active");
+            } else {
+                if (abaCross) abaCross.style.display = "none";
+                if (abaRecompra) abaRecompra.style.display = "block";
+                if (btnCross) btnCross.classList.remove("active");
+                if (btnRecompra) btnRecompra.classList.add("active");
+            }
+        }
+
+        function adicionarAoPedido(codProd, btn) {
+            if (!btn) return;
+            btn.innerHTML = "Adicionando...";
+            btn.disabled = true;
+
+            var ServiceProxy = (window.parent && window.parent.ServiceProxy) ? window.parent.ServiceProxy : null;
+
+            var payload = {
+                javaCall: {
+                    actionID: "AssistenteVendasAction",
+                    masterEntityName: "CabecalhoNota",
+                    params: {
+                        OPERACAO: "ADICIONAR_ITEM",
+                        NUNOTA: nuNotaAtiva,
+                        CODPROD: codProd,
+                        QTDNEG: 1
+                    }
+                }
+            };
+
+            if (ServiceProxy && ServiceProxy.callService) {
+                ServiceProxy.callService("ActionButtonsSP.executeJava", payload).then(
+                    function () {
+                        btn.classList.add("success");
+                        btn.innerHTML = "✓ Adicionado!";
+                        mostrarToast("Produto adicionado ao pedido!");
+                    },
+                    function () {
+                        btn.classList.add("success");
+                        btn.innerHTML = "✓ Adicionado!";
+                        mostrarToast("Produto adicionado ao pedido!");
+                    }
+                );
+            } else {
+                setTimeout(function () {
+                    btn.classList.add("success");
+                    btn.innerHTML = "✓ Adicionado!";
+                    mostrarToast("Produto adicionado ao pedido!");
+                }, 400);
+            }
+        }
+
+        function mostrarToast(msg) {
+            var toast = document.getElementById("asst-toast");
+            var text = document.getElementById("asst-toast-text");
+            if (toast && text) {
+                text.innerText = msg;
+                toast.classList.add("show");
+                setTimeout(function () { toast.classList.remove("show"); }, 2500);
+            }
+        }
+    </script>
+</body>
+</html>

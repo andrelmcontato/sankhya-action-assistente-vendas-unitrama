@@ -1,0 +1,137 @@
+<div id="assistente-root" class="asst-root">
+    <!-- 1. Balãozinho Flutuante Oficial (Pill de Oportunidades com Drag & Drop) -->
+    <div id="asst-balloon" class="asst-balloon" onclick="asstAbrirDrawer()">
+        <!-- Alça de Arrasto (6 pontinhos ::) -->
+        <div class="asst-drag-handle" id="asst-drag-handle" title="Arraste para reposicionar">
+            <svg width="8" height="16" viewBox="0 0 8 16" fill="currentColor">
+                <circle cx="2" cy="2" r="1.3"/>
+                <circle cx="6" cy="2" r="1.3"/>
+                <circle cx="2" cy="8" r="1.3"/>
+                <circle cx="6" cy="8" r="1.3"/>
+                <circle cx="2" cy="14" r="1.3"/>
+                <circle cx="6" cy="14" r="1.3"/>
+            </svg>
+        </div>
+
+        <!-- Ícone Circular Verde Edeltec -->
+        <div class="asst-balloon-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="12" cy="7" r="2.5"/>
+                <circle cx="6.5" cy="16.5" r="2.5"/>
+                <circle cx="17.5" cy="16.5" r="2.5"/>
+                <line x1="12" y1="7" x2="6.5" y2="16.5" stroke="#ffffff" stroke-width="1.8"/>
+                <line x1="12" y1="7" x2="17.5" y2="16.5" stroke="#ffffff" stroke-width="1.8"/>
+                <line x1="6.5" y1="16.5" x2="17.5" y2="16.5" stroke="#ffffff" stroke-width="1.8"/>
+            </svg>
+        </div>
+
+        <!-- Texto em Duas Linhas Oficial Sankhya -->
+        <div class="asst-balloon-text">
+            <div class="asst-balloon-title">Mais oportunidades!</div>
+            <div class="asst-balloon-subtitle" id="asst-balloon-subtitle">Ofereça estes itens</div>
+        </div>
+
+        <!-- Botão Fechar Notificação -->
+        <button class="asst-balloon-close" onclick="event.stopPropagation(); asstFecharBaloon();" title="Ocultar balãozinho">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+        </button>
+    </div>
+
+
+
+    <!-- 3. Painel Lateral Deslizante (Slide-over Drawer Edeltec Agents) -->
+    <div id="asst-drawer" class="asst-drawer">
+        <!-- Cabeçalho Oficial Unitrama -->
+        <div class="asst-drawer-header">
+            <div class="asst-drawer-header-left">
+                <span class="asst-drawer-header-title">Unitrama - Assistente de Vendas</span>
+            </div>
+            <div class="asst-drawer-header-actions">
+                <!-- Botão Recarregar Sugestões -->
+                <button type="button" class="asst-drawer-icon-btn" id="asst-btn-refresh-sugestoes" onclick="asstAtualizarSugestoes(false)" title="Recarregar sugestões">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M23 4v6h-6"></path>
+                        <path d="M1 20v-6h6"></path>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                    </svg>
+                </button>
+                <!-- Botão Ajuda -->
+                <button type="button" class="asst-drawer-icon-btn" onclick="asstToggleAjuda()" title="Como funcionam as sugestões?">
+                    <span style="font-weight: 700; font-size: 14px;">?</span>
+                </button>
+                <!-- Botão Minimizar (Voltar ao balão) -->
+                <button type="button" class="asst-drawer-icon-btn" onclick="asstMinimizarParaBalao()" title="Minimizar (voltar ao balão)">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                </button>
+                <!-- Botão Fechar / Encerrar -->
+                <button type="button" class="asst-drawer-icon-btn" onclick="asstFecharDrawer()" title="Fechar painel de sugestões">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Box Explicativo de Ajuda Unitrama (Colapsável) -->
+        <div id="asst-help-box" class="asst-help-box" style="display: none;">
+            <div class="asst-help-header">
+                <span class="asst-help-title">💡 Como funcionam as sugestões?</span>
+                <button type="button" class="asst-help-close" onclick="asstToggleAjuda()">×</button>
+            </div>
+            <div class="asst-help-text">
+                O motor de inteligência da Unitrama analisa o histórico de compras de pedidos semelhantes (Market Basket). Os produtos exibidos são aqueles com maior afinidade estatística de venda conjunta com os itens atuais do seu pedido.
+            </div>
+        </div>
+
+        <!-- Bloco de Título e Contexto Oficial -->
+        <div class="asst-drawer-intro">
+            <div class="asst-intro-brand">
+                <div class="asst-intro-bia-icon">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                        <circle cx="12" cy="7" r="2.5"/>
+                        <circle cx="6.5" cy="16.5" r="2.5"/>
+                        <circle cx="17.5" cy="16.5" r="2.5"/>
+                        <line x1="12" y1="7" x2="6.5" y2="16.5" stroke="#ffffff" stroke-width="2"/>
+                        <line x1="12" y1="7" x2="17.5" y2="16.5" stroke="#ffffff" stroke-width="2"/>
+                        <line x1="6.5" y1="16.5" x2="17.5" y2="16.5" stroke="#ffffff" stroke-width="2"/>
+                    </svg>
+                </div>
+                <h3 class="asst-intro-title">Sugestões de vendas</h3>
+            </div>
+            <div class="asst-intro-subtitle">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+                Sugestões com base no pedido
+            </div>
+            <p class="asst-intro-desc">Quem compra os itens no seu pedido também costuma comprar:</p>
+        </div>
+
+        <!-- Corpo do Drawer com Lista de Cards -->
+        <div class="asst-drawer-body">
+            <div id="asst-drawer-cards" class="asst-cards-list">
+                <!-- Injetados dinamicamente via JS a partir da TVIMBR -->
+            </div>
+
+            <!-- Estado Vazio Oficial -->
+            <div id="asst-drawer-empty" class="asst-drawer-empty" style="display: none;">
+                <p>Nenhuma sugestão disponível</p>
+            </div>
+        </div>
+
+        <!-- Toast de Confirmação no Rodapé -->
+        <div id="asst-toast" class="asst-toast">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            <span id="asst-toast-text">Item adicionado ao pedido com sucesso!</span>
+        </div>
+    </div>
+</div>

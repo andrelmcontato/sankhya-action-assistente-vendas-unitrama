@@ -1,0 +1,32 @@
+# Bytecode and Compilation Outputs
+*.class
+bin/
+build/
+out/
+target/
+*.jar
+*.war
+*.rar
+*.zip
+
+# IDE and Editor Metadata
+.idea/
+**/.idea/
+*.iml
+**/*.iml
+.vscode/
+*.ipr
+*.iws
+
+# Sensitive Configuration & Environment Variables
+.env
+.env.*
+*.credentials
+*.pem
+*.key
+
+# Logs and OS Artifacts
+*.log
+logs/
+.DS_Store
+Thumbs.db
