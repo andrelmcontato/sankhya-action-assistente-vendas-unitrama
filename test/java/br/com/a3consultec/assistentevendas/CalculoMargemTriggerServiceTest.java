@@ -142,6 +142,22 @@ public class CalculoMargemTriggerServiceTest {
     }
 
     @Test
+    public void testDiferencaCusto114vs116ExplicaDiscrepanciaExata() {
+        BigDecimal vlrUnitBase = new BigDecimal("370.98");
+        BigDecimal aliqIpi = new BigDecimal("3.25");
+
+        // Custo antigo incorreto (116.18) gerava 69.67%:
+        BigDecimal cusVarAntigo = new BigDecimal("116.18");
+        BigDecimal margemAntiga = service.calcularMargemRealTrigger(contextoPadrao, vlrUnitBase, cusVarAntigo, aliqIpi);
+        assertEquals(new BigDecimal("69.67"), margemAntiga);
+
+        // Custo real oficial com local resolvido (114.30) gera 70.16% identico ao ERP:
+        BigDecimal cusVarOficial = new BigDecimal("114.30");
+        BigDecimal margemOficial = service.calcularMargemRealTrigger(contextoPadrao, vlrUnitBase, cusVarOficial, aliqIpi);
+        assertEquals(new BigDecimal("70.16"), margemOficial);
+    }
+
+    @Test
     public void testCalculoMargemRealTriggerSemIpi() {
         CalculoMargemTriggerService.NotaFiscalContexto ctxSemIpi = new CalculoMargemTriggerService.NotaFiscalContexto();
         ctxSemIpi.clienteTemIpi = false;
