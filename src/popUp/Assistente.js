@@ -34,6 +34,8 @@
                 var vlrNum = Number(it.vlrVenda) || 0;
                 var mNum = (typeof it.margemSugerida !== "undefined" && it.margemSugerida !== null) ? Number(it.margemSugerida) : 25;
                 it.margemSugerida = mNum;
+                var agNum = (it.agrupMin && Number(it.agrupMin) > 0) ? Number(it.agrupMin) : 1;
+                it.agrupMin = agNum;
                 if (!it.fatorK || Number(it.fatorK) <= 0) {
                     if (vlrNum > 0) {
                         it.fatorK = vlrNum * (1 - (mNum / 100));
@@ -42,6 +44,7 @@
                     }
                 }
                 itensSugestoesMap[it.codProd] = it;
+                itensSugestoesMap[String(it.codProd)] = it;
             }
         }
     }
@@ -429,8 +432,15 @@
 
         content.appendChild(pricingRow);
 
+        var agrupMin = (item && item.agrupMin && Number(item.agrupMin) > 0) ? Number(item.agrupMin) : 1;
+
         var controls = document.createElement("div");
         controls.className = "asst-card-controls";
+
+        var leftControls = document.createElement("div");
+        leftControls.style.display = "flex";
+        leftControls.style.alignItems = "center";
+        leftControls.style.gap = "6px";
 
         var stepper = document.createElement("div");
         stepper.className = "asst-stepper";
@@ -439,25 +449,35 @@
         btnMinus.type = "button";
         btnMinus.className = "asst-step-btn";
         btnMinus.textContent = "-";
-        btnMinus.onclick = function () { asstAlterarQtd(cod, -1); };
+        btnMinus.onclick = function () { asstAlterarQtd(cod, -agrupMin); };
 
         var input = document.createElement("input");
         input.type = "text";
         input.className = "asst-step-input";
         input.id = "asst-qty-" + cod;
-        input.value = "1";
+        input.value = String(agrupMin);
         input.readOnly = true;
 
         var btnPlus = document.createElement("button");
         btnPlus.type = "button";
         btnPlus.className = "asst-step-btn";
         btnPlus.textContent = "+";
-        btnPlus.onclick = function () { asstAlterarQtd(cod, 1); };
+        btnPlus.onclick = function () { asstAlterarQtd(cod, agrupMin); };
 
         stepper.appendChild(btnMinus);
         stepper.appendChild(input);
         stepper.appendChild(btnPlus);
-        controls.appendChild(stepper);
+        leftControls.appendChild(stepper);
+
+        if (agrupMin > 1) {
+            var badgeAgrup = document.createElement("span");
+            badgeAgrup.className = "asst-badge-agrup";
+            badgeAgrup.textContent = "Múlt: " + formatarNumeroBR(agrupMin, 0);
+            badgeAgrup.title = "Este produto só pode ser negociado em múltiplos de " + formatarNumeroBR(agrupMin, 0);
+            leftControls.appendChild(badgeAgrup);
+        }
+
+        controls.appendChild(leftControls);
 
         var btnAdd = document.createElement("button");
         btnAdd.type = "button";
@@ -489,11 +509,17 @@
     exp("asstAlterarQtd", function (codProd, delta) {
         var input = document.getElementById("asst-qty-" + codProd);
         if (!input) return;
-        var q = parseInt(input.value, 10) || 1;
+        var item = itensSugestoesMap[codProd] || itensSugestoesMap[String(codProd)];
+        var step = (item && item.agrupMin && Number(item.agrupMin) > 0) ? Number(item.agrupMin) : 1;
+        var q = parseFloat(input.value) || step;
         q += delta;
-        if (q < 1) q = 1;
-        if (q > 9999) q = 9999;
-        input.value = q;
+        if (q < step) q = step;
+        var resto = q % step;
+        if (resto !== 0) {
+            q = Math.ceil(q / step) * step;
+        }
+        if (q > 999999) q = 999999;
+        input.value = String(q);
     });
 
     // Alterar Preço Unitário e recalcular Margem Alvo (%) via fatorK da Unitrama
@@ -647,10 +673,14 @@
     exp("asstAdicionarAoPedido", function (codProd) {
         var btn = document.getElementById("asst-btn-" + codProd);
         var input = document.getElementById("asst-qty-" + codProd);
-        var qtd = input ? (parseInt(input.value, 10) || 1) : 1;
+        var item = itensSugestoesMap[codProd] || itensSugestoesMap[String(codProd)];
+        var step = (item && item.agrupMin && Number(item.agrupMin) > 0) ? Number(item.agrupMin) : 1;
+        var qtd = input ? (parseFloat(input.value) || step) : step;
+        if (qtd < step) qtd = step;
+        var resto = qtd % step;
+        if (resto !== 0) qtd = Math.ceil(qtd / step) * step;
 
         var inputPreco = document.getElementById("asst-preco-" + codProd);
-        var item = itensSugestoesMap[codProd];
         var vlrFinal = inputPreco ? parseNumeroBR(inputPreco.value) : (item ? Number(item.vlrVenda) : 0);
         if (vlrFinal <= 0 && item && item.vlrVenda) {
             vlrFinal = Number(item.vlrVenda);
@@ -751,9 +781,14 @@
             var fnToast = window.asstMostrarToast || (window.top && window.top.asstMostrarToast);
             var msg = "Não foi possível adicionar o produto.";
             if (err) {
-                if (err.statusMessage) msg = err.statusMessage;
-                else if (err.message) msg = err.message;
-                else if (typeof err === "string") msg = err;
+                var raw = (err.statusMessage || err.message || (typeof err === "string" ? err : "") || "");
+                if (raw.indexOf("Regra Personalizada:") > -1) {
+                    msg = raw.split("Regra Personalizada:")[1].replace(/<[^>]+>/g, "").trim();
+                } else if (raw.indexOf("múltiplos de") > -1) {
+                    msg = raw.replace(/<[^>]+>/g, "").trim();
+                } else if (raw) {
+                    msg = raw.replace(/<[^>]+>/g, "").substring(0, 120);
+                }
             }
             if (fnToast) fnToast(msg);
         };
@@ -870,28 +905,14 @@
             }
         };
 
-        var url = "/mge/service.sbr?serviceName=ActionButtonsSP.executeJava&outputType=json";
-        if (location.search && location.search.indexOf("mgeSession=") > -1) {
-            var match = location.search.match(/mgeSession=([^&]+)/);
-            if (match && match[1]) {
-                url += "&mgeSession=" + match[1];
-            }
-        }
-
-        fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json;charset=UTF-8" },
-            body: JSON.stringify({
-                serviceName: "ActionButtonsSP.executeJava",
-                requestBody: javaPayload
-            })
-        }).then(function (res) {
-            return res.json();
-        }).then(function (data) {
+        var processarRespostaSugestoes = function (data) {
             finalizarLoading();
-            if (data && data.statusMessage) {
+            var rawMsg = (data && data.responseBody && data.responseBody.statusMessage) 
+                ? data.responseBody.statusMessage 
+                : ((data && data.statusMessage) ? data.statusMessage : null);
+            if (rawMsg) {
                 try {
-                    var parsed = JSON.parse(data.statusMessage);
+                    var parsed = JSON.parse(rawMsg);
                     if (Array.isArray(parsed)) {
                         itensSugestoes = parsed;
                         indexarSugestoesMap();
@@ -906,20 +927,60 @@
                         return;
                     }
                 } catch (eParse) {
-                    console.warn("[AssistenteVendas] Resposta de sugestões não é JSON:", data.statusMessage);
+                    console.warn("[AssistenteVendas] Resposta de sugestões não é JSON:", rawMsg);
                 }
             }
 
             if (!silencioso && fnToast) {
                 fnToast("Sugestões atualizadas.");
             }
-        }).catch(function (err) {
-            finalizarLoading();
-            console.warn("[AssistenteVendas] Erro ao buscar novas sugestões:", err);
-            if (!silencioso && fnToast) {
-                fnToast("Não foi possível atualizar as sugestões.");
+        };
+
+        var sp = (typeof ServiceProxy !== "undefined" && ServiceProxy) 
+            ? ServiceProxy 
+            : (window.ServiceProxy || (window.parent && window.parent.ServiceProxy) || (window.top && window.top.ServiceProxy));
+
+        if (sp && sp.callService) {
+            sp.callService("ActionButtonsSP.executeJava", javaPayload).then(
+                function (resp) {
+                    processarRespostaSugestoes(resp);
+                },
+                function (err) {
+                    finalizarLoading();
+                    console.warn("[AssistenteVendas] Erro ao buscar novas sugestões via ServiceProxy:", err);
+                    if (!silencioso && fnToast) {
+                        fnToast("Não foi possível atualizar as sugestões.");
+                    }
+                }
+            );
+        } else {
+            var url = "/mge/service.sbr?serviceName=ActionButtonsSP.executeJava&outputType=json";
+            if (location.search && location.search.indexOf("mgeSession=") > -1) {
+                var match = location.search.match(/mgeSession=([^&]+)/);
+                if (match && match[1]) {
+                    url += "&mgeSession=" + match[1];
+                }
             }
-        });
+
+            fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json;charset=UTF-8" },
+                body: JSON.stringify({
+                    serviceName: "ActionButtonsSP.executeJava",
+                    requestBody: javaPayload
+                })
+            }).then(function (res) {
+                return res.json();
+            }).then(function (data) {
+                processarRespostaSugestoes(data);
+            }).catch(function (err) {
+                finalizarLoading();
+                console.warn("[AssistenteVendas] Erro ao buscar novas sugestões via fetch:", err);
+                if (!silencioso && fnToast) {
+                    fnToast("Não foi possível atualizar as sugestões.");
+                }
+            });
+        }
     });
 
     function recarregarItensETotaisCentral() {

@@ -79,14 +79,15 @@ public class AdicionarItemAction implements AcaoRotinaJava {
         String descrProd = "";
         String codVol = "UN";
         BigDecimal vlrUnit = BigDecimal.ZERO;
+        BigDecimal agrupMin = BigDecimal.ONE;
 
-        // 1. Obter dados cadastrais essenciais do produto (descrição, unidade de volume padrão e preço de referência)
+        // 1. Obter dados cadastrais essenciais do produto (descrição, unidade de volume padrão, agrupamento mínimo e preço de referência)
         try {
             jdbc = dwfFacade.getJdbcWrapper();
             jdbc.openSession();
             Connection conn = jdbc.getConnection();
 
-            String sqlProd = "SELECT P.DESCRPROD, P.CODVOL, "
+            String sqlProd = "SELECT P.DESCRPROD, P.CODVOL, NVL(P.AGRUPMIN, 1) AS AGRUPMIN, "
                            + "       COALESCE("
                            + "           (SELECT MAX(EXC.VLRVENDA) FROM TGFEXC EXC WHERE EXC.CODPROD = P.CODPROD AND EXC.VLRVENDA > 0), "
                            + "           (SELECT MAX(ITE.VLRUNIT) FROM TGFITE ITE WHERE ITE.CODPROD = P.CODPROD AND ITE.VLRUNIT > 0), "
@@ -104,6 +105,10 @@ public class AdicionarItemAction implements AcaoRotinaJava {
                     String cv = rsProd.getString("CODVOL");
                     if (cv != null && !cv.trim().isEmpty()) {
                         codVol = cv.trim();
+                    }
+                    BigDecimal ag = rsProd.getBigDecimal("AGRUPMIN");
+                    if (ag != null && ag.compareTo(BigDecimal.ZERO) > 0) {
+                        agrupMin = ag;
                     }
                     BigDecimal vu = rsProd.getBigDecimal("VLRVENDA");
                     if (vu != null) {
@@ -123,6 +128,12 @@ public class AdicionarItemAction implements AcaoRotinaJava {
                 } catch (Exception ignored) {
                 }
             }
+        }
+
+        // Validação e Ajuste de Múltiplos Mínimos (TGFPRO.AGRUPMIN)
+        qtdNeg = ajustarQuantidadeAgrupMin(qtdNeg, agrupMin);
+        if (agrupMin.compareTo(BigDecimal.ONE) > 0) {
+            System.out.println("[AdicionarItemAction] Produto " + codProd + " possui AGRUPMIN=" + agrupMin + ". Qtd ajustada para múltiplo exato: " + qtdNeg);
         }
 
         // Se o vendedor informou um preço negociado personalizado, prioriza-o
@@ -309,5 +320,24 @@ public class AdicionarItemAction implements AcaoRotinaJava {
         }
 
         return null;
+    }
+
+    /**
+     * Ajusta a quantidade informada para respeitar o agrupamento mínimo (TGFPRO.AGRUPMIN).
+     * Se qtd for menor que agrupMin, assume agrupMin.
+     * Se qtd não for múltiplo exato, arredonda para cima no próximo múltiplo.
+     */
+    public static BigDecimal ajustarQuantidadeAgrupMin(BigDecimal qtd, BigDecimal agrupMin) {
+        if (agrupMin == null || agrupMin.compareTo(BigDecimal.ONE) <= 0) {
+            return (qtd != null && qtd.compareTo(BigDecimal.ZERO) > 0) ? qtd : BigDecimal.ONE;
+        }
+        if (qtd == null || qtd.compareTo(agrupMin) < 0) {
+            return agrupMin;
+        }
+        BigDecimal[] divRem = qtd.divideAndRemainder(agrupMin);
+        if (divRem[1].compareTo(BigDecimal.ZERO) != 0) {
+            return divRem[0].add(BigDecimal.ONE).multiply(agrupMin);
+        }
+        return qtd;
     }
 }

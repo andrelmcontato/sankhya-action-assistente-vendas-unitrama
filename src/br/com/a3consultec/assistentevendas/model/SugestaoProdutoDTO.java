@@ -28,6 +28,9 @@ public class SugestaoProdutoDTO implements Serializable {
     private BigDecimal aliquotaIpi;
     private transient BigDecimal custoVariavel;
 
+    // Campo de agrupamento mínimo / múltiplos de venda (TGFPRO.AGRUPMIN)
+    private BigDecimal agrupMin;
+
     public SugestaoProdutoDTO() {
     }
 
@@ -157,5 +160,13 @@ public class SugestaoProdutoDTO implements Serializable {
 
     public void setCustoVariavel(BigDecimal custoVariavel) {
         this.custoVariavel = custoVariavel;
+    }
+
+    public BigDecimal getAgrupMin() {
+        return (agrupMin != null && agrupMin.compareTo(BigDecimal.ZERO) > 0) ? agrupMin : BigDecimal.ONE;
+    }
+
+    public void setAgrupMin(BigDecimal agrupMin) {
+        this.agrupMin = agrupMin;
     }
 }

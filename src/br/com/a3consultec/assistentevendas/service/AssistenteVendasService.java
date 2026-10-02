@@ -179,7 +179,7 @@ public class AssistenteVendasService {
                    + "    GROUP BY E.CODPROD "
                    + ") "
                    + "SELECT R.CODPROD_B AS CODPROD_SUG, R.MAX_LIFT, R.MAX_CONF, R.HINT_TEXTO, R.TIPO_EXPLICACAO, "
-                   + "       P.DESCRPROD, P.MARCA, P.COMPLDESC, "
+                   + "       P.DESCRPROD, P.MARCA, P.COMPLDESC, NVL(P.AGRUPMIN, 1) AS AGRUPMIN, "
                    + "       COALESCE("
                    + "           (SELECT MAX(EXC.VLRVENDA) "
                    + "            FROM TGFEXC EXC "
@@ -255,6 +255,7 @@ public class AssistenteVendasService {
                 dto.setDescrProd(rs.getString("DESCRPROD"));
                 dto.setMarca(rs.getString("MARCA"));
                 dto.setComplemento(rs.getString("COMPLDESC"));
+                dto.setAgrupMin(rs.getBigDecimal("AGRUPMIN"));
                 dto.setVlrVenda(rs.getBigDecimal("VLRVENDA"));
                 dto.setEstoqueDisponivel(rs.getBigDecimal("ESTOQUE_DISPONIVEL"));
 
@@ -330,7 +331,7 @@ public class AssistenteVendasService {
                    + "    INNER JOIN ITENS_RECORRENTES IR ON IR.CODPROD = E.CODPROD "
                    + "    GROUP BY E.CODPROD "
                    + ") "
-                   + "SELECT IR.CODPROD, P.DESCRPROD, P.MARCA, "
+                   + "SELECT IR.CODPROD, P.DESCRPROD, P.MARCA, NVL(P.AGRUPMIN, 1) AS AGRUPMIN, "
                    + "       COALESCE("
                    + "           (SELECT MAX(EXC.VLRVENDA) "
                    + "            FROM TGFEXC EXC "
@@ -399,6 +400,7 @@ public class AssistenteVendasService {
                 dto.setCodProd(rs.getBigDecimal("CODPROD"));
                 dto.setDescrProd(rs.getString("DESCRPROD"));
                 dto.setMarca(rs.getString("MARCA"));
+                dto.setAgrupMin(rs.getBigDecimal("AGRUPMIN"));
                 dto.setVlrVenda(rs.getBigDecimal("VLRVENDA"));
                 dto.setEstoqueDisponivel(rs.getBigDecimal("ESTOQUE_DISPONIVEL"));
                 dto.setTagAfinidade("Item Recorrente");
@@ -568,7 +570,7 @@ public class AssistenteVendasService {
             sug.setMargemSugerida(margem);
             sug.setCustoVariavel(null); // SIGILO COMERCIAL ESTRITO
 
-            System.out.println("[AssistenteVendas Unitrama v1.0.7] NUNOTA=" + ctx.nuNota
+            System.out.println("[AssistenteVendas Unitrama v1.0.8] NUNOTA=" + ctx.nuNota
                     + " | Prod=" + sug.getCodProd()
                     + " | CodLocal=" + codLocal
                     + " | VlrVenda=" + sug.getVlrVenda()
@@ -602,7 +604,7 @@ public class AssistenteVendasService {
     }
 
     private BigDecimal obterCodLocalProduto(Connection conn, BigDecimal codProd, BigDecimal codEmp, BigDecimal nuNota) {
-        if (codProd == null) return BigDecimal.ZERO;
+        if (codProd == null) return new BigDecimal("10001");
         if (codEmp == null) codEmp = BigDecimal.ONE;
 
         // 1. Local padrão dos itens já presentes no pedido atual (se houver)
@@ -624,11 +626,33 @@ public class AssistenteVendasService {
             }
         }
 
-        // 2. Local com maior saldo de estoque disponível (TGFEST) na empresa
+        // 2. Consulta em TGFCUS priorizando 10001 (ESTOQUE REVENDA da Unitrama)
+        String sqlCusLoc = "SELECT CODLOCAL FROM ("
+                         + "  SELECT CODLOCAL FROM TGFCUS "
+                         + "  WHERE CODPROD = ? AND CODEMP = ? AND CUSVARIAVEL > 0 "
+                         + "  ORDER BY (CASE WHEN CODLOCAL = 10001 THEN 0 WHEN CODLOCAL > 0 THEN 1 ELSE 2 END), DTATUAL DESC"
+                         + ") WHERE ROWNUM = 1";
+        PreparedStatement psCl = null;
+        ResultSet rsCl = null;
+        try {
+            psCl = conn.prepareStatement(sqlCusLoc);
+            psCl.setBigDecimal(1, codProd);
+            psCl.setBigDecimal(2, codEmp);
+            rsCl = psCl.executeQuery();
+            if (rsCl.next()) {
+                BigDecimal cl = rsCl.getBigDecimal("CODLOCAL");
+                if (cl != null && cl.compareTo(BigDecimal.ZERO) > 0) return cl;
+            }
+        } catch (Exception ignored) {
+        } finally {
+            fechar(psCl, rsCl);
+        }
+
+        // 3. Local com maior saldo de estoque disponível (TGFEST) na empresa priorizando 10001
         String sqlEst = "SELECT CODLOCAL FROM ("
                       + "  SELECT CODLOCAL FROM TGFEST "
                       + "  WHERE CODPROD = ? AND CODEMP = ? AND (ESTOQUE - RESERVADO) > 0 "
-                      + "  ORDER BY (ESTOQUE - RESERVADO) DESC"
+                      + "  ORDER BY (CASE WHEN CODLOCAL = 10001 THEN 0 WHEN CODLOCAL > 0 THEN 1 ELSE 2 END), (ESTOQUE - RESERVADO) DESC"
                       + ") WHERE ROWNUM = 1";
         PreparedStatement psEst = null;
         ResultSet rsEst = null;
@@ -646,11 +670,11 @@ public class AssistenteVendasService {
             fechar(psEst, rsEst);
         }
 
-        // 3. Qualquer local cadastrado com registro em TGFEST para este produto e empresa
+        // 4. Qualquer local cadastrado com registro em TGFEST para este produto e empresa
         String sqlEstQualquer = "SELECT CODLOCAL FROM ("
                               + "  SELECT CODLOCAL FROM TGFEST "
                               + "  WHERE CODPROD = ? AND CODEMP = ? "
-                              + "  ORDER BY ESTOQUE DESC"
+                              + "  ORDER BY (CASE WHEN CODLOCAL = 10001 THEN 0 WHEN CODLOCAL > 0 THEN 1 ELSE 2 END), ESTOQUE DESC"
                               + ") WHERE ROWNUM = 1";
         PreparedStatement psEq = null;
         ResultSet rsEq = null;
@@ -668,7 +692,7 @@ public class AssistenteVendasService {
             fechar(psEq, rsEq);
         }
 
-        // 4. Local padrão cadastrado na TGFPRO do produto
+        // 5. Local padrão cadastrado na TGFPRO do produto
         String sqlProd = "SELECT NVL(CODLOCALPADRAO, 0) AS CODLOCAL FROM TGFPRO WHERE CODPROD = ?";
         PreparedStatement psProd = null;
         ResultSet rsProd = null;
@@ -685,16 +709,19 @@ public class AssistenteVendasService {
             fechar(psProd, rsProd);
         }
 
-        return BigDecimal.ZERO;
+        // Fallback canônico oficial Unitrama: 10001 (ESTOQUE REVENDA)
+        return new BigDecimal("10001");
     }
 
     private BigDecimal obterCustoVariavelProduto(JdbcWrapper jdbc, BigDecimal codProd, BigDecimal codEmp, BigDecimal codLocal, Object dtNeg) {
         if (codProd == null) return BigDecimal.ZERO;
         if (codEmp == null) codEmp = BigDecimal.ONE;
-        if (codLocal == null) codLocal = BigDecimal.ZERO;
+        if (codLocal == null || codLocal.compareTo(BigDecimal.ZERO) <= 0) {
+            codLocal = new BigDecimal("10001");
+        }
         Object dataNeg = dtNeg != null ? dtNeg : new Timestamp(System.currentTimeMillis());
 
-        // 1. Função oficial do ERP Sankhya: OBTEMCUSTO_EDT via NativeSql (idêntica a ActionRecalculoIPIMargem e TRG_INC_UPD_TGFITE_MRG)
+        // 1. Função oficial do ERP Sankhya: OBTEMCUSTO_EDT via NativeSql com codLocal
         NativeSql sqlEdt = new NativeSql(jdbc);
         ResultSet rsEdt = null;
         try {
@@ -723,57 +750,57 @@ public class AssistenteVendasService {
                 }
             }
         } catch (Exception e) {
-            System.err.println("[AssistenteVendas Unitrama v1.0.7] Aviso OBTEMCUSTO_EDT para prod " + codProd + " local " + codLocal + ": " + e.getMessage());
+            System.err.println("[AssistenteVendas Unitrama] Aviso OBTEMCUSTO_EDT para prod " + codProd + " local " + codLocal + ": " + e.getMessage());
         } finally {
             JdbcUtils.closeResultSet(rsEdt);
             NativeSql.releaseResources(sqlEdt);
         }
 
-        // 2. Se OBTEMCUSTO_EDT com codLocal retornou 0 e codLocal > 0, tenta com codLocal = 0
-        if (codLocal.compareTo(BigDecimal.ZERO) > 0) {
-            NativeSql sqlEdtZero = new NativeSql(jdbc);
-            ResultSet rsEdtZero = null;
+        // 2. Se codLocal for diferente de 10001 e retornou 0, tenta explicitamente 10001 (ESTOQUE REVENDA)
+        if (codLocal.compareTo(new BigDecimal("10001")) != 0) {
+            NativeSql sqlEdt10001 = new NativeSql(jdbc);
+            ResultSet rsEdt10001 = null;
             try {
-                sqlEdtZero.appendSql("SELECT NVL(OBTEMCUSTO_EDT(");
-                sqlEdtZero.appendSql("  :CODPROD, ");
-                sqlEdtZero.appendSql("  GET_TSIPAR_LOGICO('CUSTOPOREMP'), ");
-                sqlEdtZero.appendSql("  :CODEMP, ");
-                sqlEdtZero.appendSql("  GET_TSIPAR_LOGICO('CUSTOPORLOC'), ");
-                sqlEdtZero.appendSql("  0, ");
-                sqlEdtZero.appendSql("  GET_TSIPAR_LOGICO('CUSTOPORCONT'), ");
-                sqlEdtZero.appendSql("  ' ', ");
-                sqlEdtZero.appendSql("  :DTNEG, ");
-                sqlEdtZero.appendSql("  2), 0) AS CUSVAR FROM DUAL");
+                sqlEdt10001.appendSql("SELECT NVL(OBTEMCUSTO_EDT(");
+                sqlEdt10001.appendSql("  :CODPROD, ");
+                sqlEdt10001.appendSql("  GET_TSIPAR_LOGICO('CUSTOPOREMP'), ");
+                sqlEdt10001.appendSql("  :CODEMP, ");
+                sqlEdt10001.appendSql("  GET_TSIPAR_LOGICO('CUSTOPORLOC'), ");
+                sqlEdt10001.appendSql("  10001, ");
+                sqlEdt10001.appendSql("  GET_TSIPAR_LOGICO('CUSTOPORCONT'), ");
+                sqlEdt10001.appendSql("  ' ', ");
+                sqlEdt10001.appendSql("  :DTNEG, ");
+                sqlEdt10001.appendSql("  2), 0) AS CUSVAR FROM DUAL");
 
-                sqlEdtZero.setNamedParameter("CODPROD", codProd);
-                sqlEdtZero.setNamedParameter("CODEMP", codEmp);
-                sqlEdtZero.setNamedParameter("DTNEG", dataNeg);
+                sqlEdt10001.setNamedParameter("CODPROD", codProd);
+                sqlEdt10001.setNamedParameter("CODEMP", codEmp);
+                sqlEdt10001.setNamedParameter("DTNEG", dataNeg);
 
-                rsEdtZero = sqlEdtZero.executeQuery();
-                if (rsEdtZero.next()) {
-                    BigDecimal cv = rsEdtZero.getBigDecimal("CUSVAR");
+                rsEdt10001 = sqlEdt10001.executeQuery();
+                if (rsEdt10001.next()) {
+                    BigDecimal cv = rsEdt10001.getBigDecimal("CUSVAR");
                     if (cv != null && cv.compareTo(BigDecimal.ZERO) > 0) {
                         return cv;
                     }
                 }
             } catch (Exception ignored) {
             } finally {
-                JdbcUtils.closeResultSet(rsEdtZero);
-                NativeSql.releaseResources(sqlEdtZero);
+                JdbcUtils.closeResultSet(rsEdt10001);
+                NativeSql.releaseResources(sqlEdt10001);
             }
         }
 
-        // 3. Fallback TGFCUS filtrando DTATUAL <= :DTNEG e priorizando CODLOCAL (Padrão Oficial Sankhya PrecoCustoHelper)
+        // 3. Fallback TGFCUS filtrando DTATUAL <= :DTNEG e priorizando 10001
         NativeSql sqlCus = new NativeSql(jdbc);
         ResultSet rsCus = null;
         try {
             sqlCus.appendSql("SELECT CUSVARIAVEL FROM (");
             sqlCus.appendSql("  SELECT CUSVARIAVEL, CODLOCAL FROM TGFCUS ");
             sqlCus.appendSql("  WHERE CODPROD = :CODPROD AND CODEMP = :CODEMP ");
-            sqlCus.appendSql("    AND (:CODLOCAL = 0 OR CODLOCAL = :CODLOCAL OR CODLOCAL = 0) ");
+            sqlCus.appendSql("    AND (CODLOCAL = 10001 OR CODLOCAL = :CODLOCAL OR CODLOCAL > 0 OR CODLOCAL = 0) ");
             sqlCus.appendSql("    AND (DTATUAL <= :DTNEG OR :DTNEG IS NULL) ");
             sqlCus.appendSql("    AND CUSVARIAVEL > 0 ");
-            sqlCus.appendSql("  ORDER BY (CASE WHEN :CODLOCAL > 0 AND CODLOCAL = :CODLOCAL THEN 0 WHEN CODLOCAL = 0 THEN 1 ELSE 2 END), DTATUAL DESC");
+            sqlCus.appendSql("  ORDER BY (CASE WHEN CODLOCAL = 10001 THEN 0 WHEN CODLOCAL = :CODLOCAL THEN 1 WHEN CODLOCAL > 0 THEN 2 ELSE 3 END), DTATUAL DESC");
             sqlCus.appendSql(") WHERE ROWNUM = 1");
 
             sqlCus.setNamedParameter("CODPROD", codProd);
@@ -794,7 +821,7 @@ public class AssistenteVendasService {
             NativeSql.releaseResources(sqlCus);
         }
 
-        // 4. Fallback histórico de TGFITE da empresa até a data do pedido (DTNEG <= :DTNEG)
+        // 4. Fallback histórico de TGFITE da empresa priorizando 10001
         NativeSql sqlIte = new NativeSql(jdbc);
         ResultSet rsIte = null;
         try {
@@ -803,10 +830,10 @@ public class AssistenteVendasService {
             sqlIte.appendSql("  FROM TGFITE ITE ");
             sqlIte.appendSql("  INNER JOIN TGFCAB CAB ON CAB.NUNOTA = ITE.NUNOTA ");
             sqlIte.appendSql("  WHERE ITE.CODPROD = :CODPROD AND CAB.CODEMP = :CODEMP ");
-            sqlIte.appendSql("    AND (:CODLOCAL = 0 OR ITE.CODLOCALORIG = :CODLOCAL OR ITE.CODLOCALORIG = 0) ");
+            sqlIte.appendSql("    AND (ITE.CODLOCALORIG = 10001 OR ITE.CODLOCALORIG = :CODLOCAL OR ITE.CODLOCALORIG > 0 OR ITE.CODLOCALORIG = 0) ");
             sqlIte.appendSql("    AND ITE.AD_CUSVARIAVEL > 0 ");
             sqlIte.appendSql("    AND (CAB.DTNEG <= :DTNEG OR :DTNEG IS NULL) ");
-            sqlIte.appendSql("  ORDER BY (CASE WHEN :CODLOCAL > 0 AND ITE.CODLOCALORIG = :CODLOCAL THEN 0 WHEN ITE.CODLOCALORIG = 0 THEN 1 ELSE 2 END), CAB.DTNEG DESC, ITE.NUNOTA DESC");
+            sqlIte.appendSql("  ORDER BY (CASE WHEN ITE.CODLOCALORIG = 10001 THEN 0 WHEN ITE.CODLOCALORIG = :CODLOCAL THEN 1 WHEN ITE.CODLOCALORIG > 0 THEN 2 ELSE 3 END), CAB.DTNEG DESC, ITE.NUNOTA DESC");
             sqlIte.appendSql(") WHERE ROWNUM = 1");
 
             sqlIte.setNamedParameter("CODPROD", codProd);
@@ -827,16 +854,16 @@ public class AssistenteVendasService {
             NativeSql.releaseResources(sqlIte);
         }
 
-        // 5. Fallback TGFCUS sem trava de data
+        // 5. Fallback TGFCUS sem trava de data priorizando 10001
         NativeSql sqlCusAny = new NativeSql(jdbc);
         ResultSet rsCusAny = null;
         try {
             sqlCusAny.appendSql("SELECT CUSVARIAVEL FROM (");
             sqlCusAny.appendSql("  SELECT CUSVARIAVEL, CODLOCAL FROM TGFCUS ");
             sqlCusAny.appendSql("  WHERE CODPROD = :CODPROD AND CODEMP = :CODEMP ");
-            sqlCusAny.appendSql("    AND (:CODLOCAL = 0 OR CODLOCAL = :CODLOCAL OR CODLOCAL = 0) ");
+            sqlCusAny.appendSql("    AND (CODLOCAL = 10001 OR CODLOCAL = :CODLOCAL OR CODLOCAL > 0 OR CODLOCAL = 0) ");
             sqlCusAny.appendSql("    AND CUSVARIAVEL > 0 ");
-            sqlCusAny.appendSql("  ORDER BY (CASE WHEN :CODLOCAL > 0 AND CODLOCAL = :CODLOCAL THEN 0 WHEN CODLOCAL = 0 THEN 1 ELSE 2 END), DTATUAL DESC");
+            sqlCusAny.appendSql("  ORDER BY (CASE WHEN CODLOCAL = 10001 THEN 0 WHEN CODLOCAL = :CODLOCAL THEN 1 WHEN CODLOCAL > 0 THEN 2 ELSE 3 END), DTATUAL DESC");
             sqlCusAny.appendSql(") WHERE ROWNUM = 1");
 
             sqlCusAny.setNamedParameter("CODPROD", codProd);
@@ -854,6 +881,38 @@ public class AssistenteVendasService {
         } finally {
             JdbcUtils.closeResultSet(rsCusAny);
             NativeSql.releaseResources(sqlCusAny);
+        }
+
+        // 6. Último recurso: OBTEMCUSTO_EDT com local 0
+        NativeSql sqlEdtZero = new NativeSql(jdbc);
+        ResultSet rsEdtZero = null;
+        try {
+            sqlEdtZero.appendSql("SELECT NVL(OBTEMCUSTO_EDT(");
+            sqlEdtZero.appendSql("  :CODPROD, ");
+            sqlEdtZero.appendSql("  GET_TSIPAR_LOGICO('CUSTOPOREMP'), ");
+            sqlEdtZero.appendSql("  :CODEMP, ");
+            sqlEdtZero.appendSql("  GET_TSIPAR_LOGICO('CUSTOPORLOC'), ");
+            sqlEdtZero.appendSql("  0, ");
+            sqlEdtZero.appendSql("  GET_TSIPAR_LOGICO('CUSTOPORCONT'), ");
+            sqlEdtZero.appendSql("  ' ', ");
+            sqlEdtZero.appendSql("  :DTNEG, ");
+            sqlEdtZero.appendSql("  2), 0) AS CUSVAR FROM DUAL");
+
+            sqlEdtZero.setNamedParameter("CODPROD", codProd);
+            sqlEdtZero.setNamedParameter("CODEMP", codEmp);
+            sqlEdtZero.setNamedParameter("DTNEG", dataNeg);
+
+            rsEdtZero = sqlEdtZero.executeQuery();
+            if (rsEdtZero.next()) {
+                BigDecimal cv = rsEdtZero.getBigDecimal("CUSVAR");
+                if (cv != null && cv.compareTo(BigDecimal.ZERO) > 0) {
+                    return cv;
+                }
+            }
+        } catch (Exception ignored) {
+        } finally {
+            JdbcUtils.closeResultSet(rsEdtZero);
+            NativeSql.releaseResources(sqlEdtZero);
         }
 
         return BigDecimal.ZERO;

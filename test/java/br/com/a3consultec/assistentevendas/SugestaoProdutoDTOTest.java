@@ -52,4 +52,19 @@ public class SugestaoProdutoDTOTest {
         assertNull(dto.getConfianca());
         assertNull(dto.getHintTexto());
     }
+
+    @Test
+    public void testAgrupMinPadraoEPersonalizado() {
+        SugestaoProdutoDTO dto = new SugestaoProdutoDTO();
+        assertEquals(BigDecimal.ONE, dto.getAgrupMin());
+
+        dto.setAgrupMin(new BigDecimal("104"));
+        assertEquals(new BigDecimal("104"), dto.getAgrupMin());
+
+        dto.setAgrupMin(BigDecimal.ZERO);
+        assertEquals(BigDecimal.ONE, dto.getAgrupMin());
+
+        dto.setAgrupMin(null);
+        assertEquals(BigDecimal.ONE, dto.getAgrupMin());
+    }
 }

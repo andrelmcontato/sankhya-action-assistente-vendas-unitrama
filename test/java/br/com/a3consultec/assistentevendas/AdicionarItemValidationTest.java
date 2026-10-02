@@ -1,5 +1,6 @@
 package br.com.a3consultec.assistentevendas;
 
+import br.com.a3consultec.assistentevendas.action.AdicionarItemAction;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
@@ -65,6 +66,31 @@ public class AdicionarItemValidationTest {
 
         codProd = new BigDecimal("100");
         assertTrue("Campos válidos devem ser aceitos", validarCamposObrigatorios(nuNota, codProd));
+    }
+
+    @Test
+    public void testAjusteQuantidadeAgrupMinCenarioProduto2889() {
+        BigDecimal agrupMin104 = new BigDecimal("104");
+
+        // Caso 1: Qtd 1.0 (que causou o erro no Wildfly) é ajustada para 104.0
+        assertEquals(new BigDecimal("104"), AdicionarItemAction.ajustarQuantidadeAgrupMin(BigDecimal.ONE, agrupMin104));
+
+        // Caso 2: Qtd abaixo de 104 (ex: 50) é ajustada para 104
+        assertEquals(new BigDecimal("104"), AdicionarItemAction.ajustarQuantidadeAgrupMin(new BigDecimal("50"), agrupMin104));
+
+        // Caso 3: Qtd exata 104 permanece 104
+        assertEquals(new BigDecimal("104"), AdicionarItemAction.ajustarQuantidadeAgrupMin(new BigDecimal("104"), agrupMin104));
+
+        // Caso 4: Qtd 105 é arredondada para o próximo múltiplo (208)
+        assertEquals(new BigDecimal("208"), AdicionarItemAction.ajustarQuantidadeAgrupMin(new BigDecimal("105"), agrupMin104));
+
+        // Caso 5: Qtd 208 permanece 208
+        assertEquals(new BigDecimal("208"), AdicionarItemAction.ajustarQuantidadeAgrupMin(new BigDecimal("208"), agrupMin104));
+
+        // Caso 6: Produto sem agrupamento (agrupMin = 1 ou nulo) mantém quantidade informada
+        assertEquals(new BigDecimal("5"), AdicionarItemAction.ajustarQuantidadeAgrupMin(new BigDecimal("5"), BigDecimal.ONE));
+        assertEquals(new BigDecimal("7"), AdicionarItemAction.ajustarQuantidadeAgrupMin(new BigDecimal("7"), null));
+        assertEquals(new BigDecimal("1"), AdicionarItemAction.ajustarQuantidadeAgrupMin(BigDecimal.ZERO, BigDecimal.ONE));
     }
 
     private BigDecimal normalizarQuantidade(BigDecimal qtd) {
