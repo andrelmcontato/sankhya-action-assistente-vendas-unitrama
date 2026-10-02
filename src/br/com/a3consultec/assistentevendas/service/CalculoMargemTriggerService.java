@@ -132,7 +132,7 @@ public class CalculoMargemTriggerService {
         BigDecimal vlrIpiUnit = BigDecimal.ZERO;
         boolean incideIpi = ctx.clienteTemIpi && !ctx.isClienteSuframa && ctx.topRecalculaIpi && aliqIpi != null && aliqIpi.compareTo(BigDecimal.ZERO) > 0;
         if (incideIpi) {
-            vlrIpiUnit = vlrUnitBase.multiply(aliqIpi).divide(CEM, 4, RoundingMode.HALF_UP);
+            vlrIpiUnit = vlrUnitBase.multiply(aliqIpi).divide(CEM, 2, RoundingMode.HALF_UP);
         }
 
         BigDecimal receitaSimuladaComIpi = vlrTotSimulado.subtract(descontoCabecalho).add(vlrIpiUnit);

@@ -470,27 +470,42 @@ public class AssistenteVendasService {
         return ctx;
     }
 
+    private static class InfoCustoEMargem {
+        BigDecimal cusVar = BigDecimal.ZERO;
+        BigDecimal margemSalva = BigDecimal.ZERO;
+        BigDecimal codLocal = BigDecimal.ZERO;
+        BigDecimal vlrUnitSalvo = BigDecimal.ZERO;
+    }
+
     private void enriquecerComMargemEPreco(Connection conn, CalculoMargemTriggerService.NotaFiscalContexto ctx, List<SugestaoProdutoDTO> sugestoes) {
         if (sugestoes == null || sugestoes.isEmpty()) return;
 
         for (SugestaoProdutoDTO sug : sugestoes) {
             BigDecimal aliqIpi = obterAliquotaIpiProduto(conn, sug.getCodProd());
-            BigDecimal cusVar = obterCustoVariavelProduto(conn, sug.getCodProd(), ctx.nuNota);
+            InfoCustoEMargem infoCusto = obterCustoEMargemProduto(conn, sug.getCodProd(), ctx.nuNota);
 
             BigDecimal fatorK = BigDecimal.ZERO;
             BigDecimal margem = BigDecimal.ZERO;
 
-            if (cusVar.compareTo(BigDecimal.ZERO) > 0) {
-                // 1. Calcula margem real simulando fielmente a trigger TRG_INC_UPD_TGFITE_MRG da Unitrama
-                margem = calculoMargemService.calcularMargemRealTrigger(ctx, sug.getVlrVenda(), cusVar, aliqIpi);
+            if (infoCusto.margemSalva != null && infoCusto.margemSalva.compareTo(BigDecimal.ZERO) > 0
+                    && sug.getVlrVenda() != null && sug.getVlrVenda().compareTo(BigDecimal.ZERO) > 0
+                    && infoCusto.vlrUnitSalvo != null && infoCusto.vlrUnitSalvo.compareTo(BigDecimal.ZERO) > 0
+                    && sug.getVlrVenda().subtract(infoCusto.vlrUnitSalvo).abs().compareTo(new BigDecimal("0.05")) <= 0) {
+                // Prioridade 1: Margem oficial já calculada pela trigger TRG_INC_UPD_TGFITE_MRG para este preço
+                margem = infoCusto.margemSalva;
+                BigDecimal umMenosMargem = BigDecimal.ONE.subtract(margem.divide(CalculoMargemTriggerService.CEM, 6, RoundingMode.HALF_UP));
+                fatorK = sug.getVlrVenda().multiply(umMenosMargem).setScale(4, RoundingMode.HALF_UP);
+            } else if (infoCusto.cusVar != null && infoCusto.cusVar.compareTo(BigDecimal.ZERO) > 0) {
+                // Prioridade 2: Simulação exata da trigger a partir do Custo Variável oficial da Unitrama
+                margem = calculoMargemService.calcularMargemRealTrigger(ctx, sug.getVlrVenda(), infoCusto.cusVar, aliqIpi);
                 if (sug.getVlrVenda() != null && sug.getVlrVenda().compareTo(BigDecimal.ZERO) > 0 && margem.compareTo(BigDecimal.ZERO) > 0) {
                     BigDecimal umMenosMargem = BigDecimal.ONE.subtract(margem.divide(CalculoMargemTriggerService.CEM, 6, RoundingMode.HALF_UP));
                     fatorK = sug.getVlrVenda().multiply(umMenosMargem).setScale(4, RoundingMode.HALF_UP);
                 } else {
-                    fatorK = calculoMargemService.calcularFatorK(ctx, cusVar, aliqIpi);
+                    fatorK = calculoMargemService.calcularFatorK(ctx, infoCusto.cusVar, aliqIpi);
                 }
             } else if (sug.getVlrVenda() != null && sug.getVlrVenda().compareTo(BigDecimal.ZERO) > 0) {
-                // 2. Fallback inteligente: consulta margem padrão cadastrada para a empresa (AD_MARGEMPOREMPRESA / TGFPRO.MARGLUCRO)
+                // Prioridade 3: Consulta margem padrão cadastrada para a empresa (AD_MARGEMPOREMPRESA / TGFPRO.MARGLUCRO)
                 BigDecimal margemPadrao = obterMargemPadraoProduto(conn, sug.getCodProd(), ctx.nuNota);
                 if (margemPadrao.compareTo(BigDecimal.ZERO) > 0) {
                     margem = margemPadrao;
@@ -532,41 +547,168 @@ public class AssistenteVendasService {
         return BigDecimal.ZERO;
     }
 
-    private BigDecimal obterCustoVariavelProduto(Connection conn, BigDecimal codProd, BigDecimal nuNota) {
+    private InfoCustoEMargem obterCustoEMargemProduto(Connection conn, BigDecimal codProd, BigDecimal nuNota) {
+        InfoCustoEMargem info = new InfoCustoEMargem();
         if (codProd == null || nuNota == null) {
-            return BigDecimal.ZERO;
+            return info;
         }
 
         BigDecimal codEmp = BigDecimal.ONE;
-        java.sql.Timestamp dtNeg = null;
-        BigDecimal codLocalOrig = BigDecimal.ZERO;
+        java.sql.Date dtNeg = null;
 
-        // 1. Carrega dados de contexto da nota para a função de custo
-        String sqlNota = "SELECT CAB.CODEMP, CAB.DTNEG, "
-                       + "       NVL((SELECT MAX(CODLOCALORIG) FROM TGFITE WHERE NUNOTA = CAB.NUNOTA AND CODPROD = ?), 0) AS CODLOCAL "
-                       + "FROM TGFCAB CAB WHERE CAB.NUNOTA = ?";
-        PreparedStatement psNota = null;
-        ResultSet rsNota = null;
+        // 0. Carrega contexto da nota
+        String sqlCab = "SELECT CAB.CODEMP, TRUNC(CAB.DTNEG) AS DTNEG FROM TGFCAB CAB WHERE CAB.NUNOTA = ?";
+        PreparedStatement psCab = null;
+        ResultSet rsCab = null;
         try {
-            psNota = conn.prepareStatement(sqlNota);
-            psNota.setBigDecimal(1, codProd);
-            psNota.setBigDecimal(2, nuNota);
-            rsNota = psNota.executeQuery();
-            if (rsNota.next()) {
-                BigDecimal ce = rsNota.getBigDecimal("CODEMP");
+            psCab = conn.prepareStatement(sqlCab);
+            psCab.setBigDecimal(1, nuNota);
+            rsCab = psCab.executeQuery();
+            if (rsCab.next()) {
+                BigDecimal ce = rsCab.getBigDecimal("CODEMP");
                 if (ce != null) codEmp = ce;
-                dtNeg = rsNota.getTimestamp("DTNEG");
-                BigDecimal cl = rsNota.getBigDecimal("CODLOCAL");
-                if (cl != null) codLocalOrig = cl;
+                dtNeg = rsCab.getDate("DTNEG");
             }
-        } catch (Exception e) {
-            System.err.println("[AssistenteVendas Unitrama] Aviso ao obter contexto da nota para custo: " + e.getMessage());
+        } catch (Exception ignored) {
         } finally {
-            fechar(psNota, rsNota);
+            fechar(psCab, rsCab);
+        }
+        if (dtNeg == null) {
+            dtNeg = new java.sql.Date(System.currentTimeMillis());
         }
 
-        // 2. Tentativa 1: Função Nativa Oficial Sankhya/Unitrama OBTEMCUSTO_EDT (Tipo 2 = Custo Variável)
-        // Idêntica à linha 204 da trigger TRG_INC_UPD_TGFITE_MRG.sql e ActionRecalculoIPIMargem.java
+        // 1. Prioridade 1: TGFITE da própria nota atual (exatamente como em ActionRecalculoIPIMargem.java)
+        // Se o produto já foi adicionado ou cotado no pedido, recupera o custo e a margem calculados pela trigger!
+        String sqlIteAtual = "SELECT NVL(ITE.AD_CUSVARIAVEL, 0) AS CUSVAR, NVL(ITE.AD_MARGEMITEM, 0) AS MARGEM, "
+                           + "       NVL(ITE.CODLOCALORIG, 0) AS CODLOCAL, NVL(ITE.VLRUNIT, 0) AS VLRUNIT "
+                           + "FROM TGFITE ITE "
+                           + "WHERE ITE.NUNOTA = ? AND ITE.CODPROD = ? "
+                           + "  AND (NVL(ITE.AD_CUSVARIAVEL, 0) > 0 OR NVL(ITE.AD_MARGEMITEM, 0) > 0) "
+                           + "ORDER BY ITE.SEQUENCIA ASC";
+        PreparedStatement psIte = null;
+        ResultSet rsIte = null;
+        try {
+            psIte = conn.prepareStatement(sqlIteAtual);
+            psIte.setBigDecimal(1, nuNota);
+            psIte.setBigDecimal(2, codProd);
+            rsIte = psIte.executeQuery();
+            if (rsIte.next()) {
+                BigDecimal cv = rsIte.getBigDecimal("CUSVAR");
+                BigDecimal mg = rsIte.getBigDecimal("MARGEM");
+                BigDecimal cl = rsIte.getBigDecimal("CODLOCAL");
+                BigDecimal vu = rsIte.getBigDecimal("VLRUNIT");
+                if (cl != null && cl.compareTo(BigDecimal.ZERO) > 0) info.codLocal = cl;
+                if (cv != null && cv.compareTo(BigDecimal.ZERO) > 0) info.cusVar = cv;
+                if (mg != null && mg.compareTo(BigDecimal.ZERO) > 0) info.margemSalva = mg;
+                if (vu != null && vu.compareTo(BigDecimal.ZERO) > 0) info.vlrUnitSalvo = vu;
+                if (info.cusVar.compareTo(BigDecimal.ZERO) > 0) {
+                    return info;
+                }
+            }
+        } catch (Exception ignored) {
+        } finally {
+            fechar(psIte, rsIte);
+        }
+
+        // 2. Prioridade 2: TGFITE de vendas recentes na mesma empresa (Unitrama)
+        // O histórico de vendas gravadas pela trigger TRG_INC_UPD_TGFITE_MRG tem o custo e local exatos da operação comercial
+        String sqlIteRecente = "SELECT CUSVAR, MARGEM, CODLOCAL, VLRUNIT FROM ("
+                             + "  SELECT NVL(ITE.AD_CUSVARIAVEL, 0) AS CUSVAR, NVL(ITE.AD_MARGEMITEM, 0) AS MARGEM, "
+                             + "         NVL(ITE.CODLOCALORIG, 0) AS CODLOCAL, NVL(ITE.VLRUNIT, 0) AS VLRUNIT "
+                             + "  FROM TGFITE ITE "
+                             + "  INNER JOIN TGFCAB CAB ON CAB.NUNOTA = ITE.NUNOTA "
+                             + "  WHERE ITE.CODPROD = ? AND CAB.CODEMP = ? AND NVL(ITE.AD_CUSVARIAVEL, 0) > 0 "
+                             + "  ORDER BY CAB.DTNEG DESC, CAB.NUNOTA DESC "
+                             + ") WHERE ROWNUM = 1";
+        PreparedStatement psRec = null;
+        ResultSet rsRec = null;
+        try {
+            psRec = conn.prepareStatement(sqlIteRecente);
+            psRec.setBigDecimal(1, codProd);
+            psRec.setBigDecimal(2, codEmp);
+            rsRec = psRec.executeQuery();
+            if (rsRec.next()) {
+                BigDecimal cv = rsRec.getBigDecimal("CUSVAR");
+                BigDecimal mg = rsRec.getBigDecimal("MARGEM");
+                BigDecimal cl = rsRec.getBigDecimal("CODLOCAL");
+                BigDecimal vu = rsRec.getBigDecimal("VLRUNIT");
+                if (cl != null && cl.compareTo(BigDecimal.ZERO) > 0) info.codLocal = cl;
+                if (cv != null && cv.compareTo(BigDecimal.ZERO) > 0) info.cusVar = cv;
+                if (mg != null && mg.compareTo(BigDecimal.ZERO) > 0) info.margemSalva = mg;
+                if (vu != null && vu.compareTo(BigDecimal.ZERO) > 0) info.vlrUnitSalvo = vu;
+                if (info.cusVar.compareTo(BigDecimal.ZERO) > 0) {
+                    return info;
+                }
+            }
+        } catch (Exception ignored) {
+        } finally {
+            fechar(psRec, rsRec);
+        }
+
+        // 3. Determinar o CODLOCAL correto para consulta de custo caso ainda não determinado
+        if (info.codLocal.compareTo(BigDecimal.ZERO) <= 0) {
+            // 3a. Local dos outros itens do pedido atual
+            String sqlLocalPedido = "SELECT NVL(MAX(CODLOCALORIG), 0) AS CODLOCAL FROM TGFITE WHERE NUNOTA = ? AND CODLOCALORIG > 0";
+            PreparedStatement psLp = null;
+            ResultSet rsLp = null;
+            try {
+                psLp = conn.prepareStatement(sqlLocalPedido);
+                psLp.setBigDecimal(1, nuNota);
+                rsLp = psLp.executeQuery();
+                if (rsLp.next()) {
+                    BigDecimal cl = rsLp.getBigDecimal("CODLOCAL");
+                    if (cl != null && cl.compareTo(BigDecimal.ZERO) > 0) info.codLocal = cl;
+                }
+            } catch (Exception ignored) {
+            } finally {
+                fechar(psLp, rsLp);
+            }
+        }
+
+        if (info.codLocal.compareTo(BigDecimal.ZERO) <= 0) {
+            // 3b. Local de estoque com saldo disponível (TGFEST) na empresa
+            String sqlEstLocal = "SELECT CODLOCAL FROM ("
+                               + "  SELECT CODLOCAL FROM TGFEST "
+                               + "  WHERE CODPROD = ? AND CODEMP = ? AND (ESTOQUE - RESERVADO) > 0 "
+                               + "  ORDER BY (ESTOQUE - RESERVADO) DESC"
+                               + ") WHERE ROWNUM = 1";
+            PreparedStatement psEst = null;
+            ResultSet rsEst = null;
+            try {
+                psEst = conn.prepareStatement(sqlEstLocal);
+                psEst.setBigDecimal(1, codProd);
+                psEst.setBigDecimal(2, codEmp);
+                rsEst = psEst.executeQuery();
+                if (rsEst.next()) {
+                    BigDecimal cl = rsEst.getBigDecimal("CODLOCAL");
+                    if (cl != null && cl.compareTo(BigDecimal.ZERO) > 0) info.codLocal = cl;
+                }
+            } catch (Exception ignored) {
+            } finally {
+                fechar(psEst, rsEst);
+            }
+        }
+
+        if (info.codLocal.compareTo(BigDecimal.ZERO) <= 0) {
+            // 3c. Local padrão no cadastro do produto (TGFPRO.CODLOCALPADRAO)
+            String sqlProdLocal = "SELECT NVL(CODLOCALPADRAO, 0) AS CODLOCAL FROM TGFPRO WHERE CODPROD = ?";
+            PreparedStatement psPl = null;
+            ResultSet rsPl = null;
+            try {
+                psPl = conn.prepareStatement(sqlProdLocal);
+                psPl.setBigDecimal(1, codProd);
+                rsPl = psPl.executeQuery();
+                if (rsPl.next()) {
+                    BigDecimal cl = rsPl.getBigDecimal("CODLOCAL");
+                    if (cl != null && cl.compareTo(BigDecimal.ZERO) > 0) info.codLocal = cl;
+                }
+            } catch (Exception ignored) {
+            } finally {
+                fechar(psPl, rsPl);
+            }
+        }
+
+        // 4. Executa a função oficial OBTEMCUSTO_EDT com o CODLOCAL resolvido
         String sqlEdt = "SELECT NVL(OBTEMCUSTO_EDT(?, GET_TSIPAR_LOGICO('CUSTOPOREMP'), ?, "
                       + "       GET_TSIPAR_LOGICO('CUSTOPORLOC'), ?, GET_TSIPAR_LOGICO('CUSTOPORCONT'), "
                       + "       ' ', ?, 2), 0) AS CUSVAR FROM DUAL";
@@ -576,69 +718,75 @@ public class AssistenteVendasService {
             psEdt = conn.prepareStatement(sqlEdt);
             psEdt.setBigDecimal(1, codProd);
             psEdt.setBigDecimal(2, codEmp);
-            psEdt.setBigDecimal(3, codLocalOrig);
-            psEdt.setTimestamp(4, dtNeg);
+            psEdt.setBigDecimal(3, info.codLocal);
+            psEdt.setDate(4, dtNeg);
             rsEdt = psEdt.executeQuery();
             if (rsEdt.next()) {
                 BigDecimal cv = rsEdt.getBigDecimal("CUSVAR");
                 if (cv != null && cv.compareTo(BigDecimal.ZERO) > 0) {
-                    return cv;
+                    info.cusVar = cv;
+                    return info;
                 }
             }
-        } catch (Exception e) {
-            // Em ambiente de mock/teste sem os parâmetros TSIPAR
+        } catch (Exception ignored) {
         } finally {
             fechar(psEdt, rsEdt);
         }
 
-        // 3. Tentativa 2: Consulta direta em TGFCUS pelo campo correto CUSVARIAVEL da empresa
+        // 5. Consulta direta em TGFCUS filtrando por CODLOCAL específico
+        if (info.codLocal.compareTo(BigDecimal.ZERO) > 0) {
+            String sqlCusLocal = "SELECT CUSVARIAVEL FROM ("
+                               + "  SELECT CUSVARIAVEL FROM TGFCUS "
+                               + "  WHERE CODPROD = ? AND CODEMP = ? AND CODLOCAL = ? AND CUSVARIAVEL > 0 "
+                               + "  ORDER BY DTATUAL DESC"
+                               + ") WHERE ROWNUM = 1";
+            PreparedStatement psCl = null;
+            ResultSet rsCl = null;
+            try {
+                psCl = conn.prepareStatement(sqlCusLocal);
+                psCl.setBigDecimal(1, codProd);
+                psCl.setBigDecimal(2, codEmp);
+                psCl.setBigDecimal(3, info.codLocal);
+                rsCl = psCl.executeQuery();
+                if (rsCl.next()) {
+                    BigDecimal cv = rsCl.getBigDecimal("CUSVARIAVEL");
+                    if (cv != null && cv.compareTo(BigDecimal.ZERO) > 0) {
+                        info.cusVar = cv;
+                        return info;
+                    }
+                }
+            } catch (Exception ignored) {
+            } finally {
+                fechar(psCl, rsCl);
+            }
+        }
+
+        // 6. Consulta em TGFCUS por empresa geral
         String sqlCusEmp = "SELECT CUSVARIAVEL FROM ("
                          + "  SELECT CUSVARIAVEL FROM TGFCUS "
                          + "  WHERE CODPROD = ? AND CODEMP = ? AND CUSVARIAVEL > 0 "
                          + "  ORDER BY DTATUAL DESC"
                          + ") WHERE ROWNUM = 1";
-        PreparedStatement psCus = null;
-        ResultSet rsCus = null;
+        PreparedStatement psCe = null;
+        ResultSet rsCe = null;
         try {
-            psCus = conn.prepareStatement(sqlCusEmp);
-            psCus.setBigDecimal(1, codProd);
-            psCus.setBigDecimal(2, codEmp);
-            rsCus = psCus.executeQuery();
-            if (rsCus.next()) {
-                BigDecimal cv = rsCus.getBigDecimal("CUSVARIAVEL");
+            psCe = conn.prepareStatement(sqlCusEmp);
+            psCe.setBigDecimal(1, codProd);
+            psCe.setBigDecimal(2, codEmp);
+            rsCe = psCe.executeQuery();
+            if (rsCe.next()) {
+                BigDecimal cv = rsCe.getBigDecimal("CUSVARIAVEL");
                 if (cv != null && cv.compareTo(BigDecimal.ZERO) > 0) {
-                    return cv;
+                    info.cusVar = cv;
+                    return info;
                 }
             }
-        } catch (Exception e) {
+        } catch (Exception ignored) {
         } finally {
-            fechar(psCus, rsCus);
+            fechar(psCe, rsCe);
         }
 
-        // 4. Tentativa 3: Consulta direta em TGFCUS pelo campo CUSVARIAVEL em qualquer empresa
-        String sqlCusGeral = "SELECT CUSVARIAVEL FROM ("
-                           + "  SELECT CUSVARIAVEL FROM TGFCUS "
-                           + "  WHERE CODPROD = ? AND CUSVARIAVEL > 0 "
-                           + "  ORDER BY DTATUAL DESC"
-                           + ") WHERE ROWNUM = 1";
-        PreparedStatement psGeral = null;
-        ResultSet rsGeral = null;
-        try {
-            psGeral = conn.prepareStatement(sqlCusGeral);
-            psGeral.setBigDecimal(1, codProd);
-            rsGeral = psGeral.executeQuery();
-            if (rsGeral.next()) {
-                BigDecimal cv = rsGeral.getBigDecimal("CUSVARIAVEL");
-                if (cv != null && cv.compareTo(BigDecimal.ZERO) > 0) {
-                    return cv;
-                }
-            }
-        } catch (Exception e) {
-        } finally {
-            fechar(psGeral, rsGeral);
-        }
-
-        // 5. Tentativa 4: Custo de reposição ou médio gerencial (CUSREP / CUSMED) em TGFCUS
+        // 7. Fallback CUSREP / CUSMED
         String sqlRepMed = "SELECT COALESCE(CUSREP, CUSMED, 0) AS CUS_ALT FROM ("
                          + "  SELECT CUSREP, CUSMED FROM TGFCUS "
                          + "  WHERE CODPROD = ? AND CODEMP = ? AND (CUSREP > 0 OR CUSMED > 0) "
@@ -654,39 +802,20 @@ public class AssistenteVendasService {
             if (rsRep.next()) {
                 BigDecimal cv = rsRep.getBigDecimal("CUS_ALT");
                 if (cv != null && cv.compareTo(BigDecimal.ZERO) > 0) {
-                    return cv;
+                    info.cusVar = cv;
+                    return info;
                 }
             }
-        } catch (Exception e) {
+        } catch (Exception ignored) {
         } finally {
             fechar(psRep, rsRep);
         }
 
-        // 6. Tentativa 5: Histórico de custo gravado no item TGFITE (AD_CUSVARIAVEL) em notas anteriores
-        String sqlIte = "SELECT AD_CUSVARIAVEL FROM ("
-                      + "  SELECT AD_CUSVARIAVEL FROM TGFITE "
-                      + "  WHERE CODPROD = ? AND CODEMP = ? AND AD_CUSVARIAVEL > 0 "
-                      + "  ORDER BY NUNOTA DESC"
-                      + ") WHERE ROWNUM = 1";
-        PreparedStatement psIte = null;
-        ResultSet rsIte = null;
-        try {
-            psIte = conn.prepareStatement(sqlIte);
-            psIte.setBigDecimal(1, codProd);
-            psIte.setBigDecimal(2, codEmp);
-            rsIte = psIte.executeQuery();
-            if (rsIte.next()) {
-                BigDecimal cv = rsIte.getBigDecimal("AD_CUSVARIAVEL");
-                if (cv != null && cv.compareTo(BigDecimal.ZERO) > 0) {
-                    return cv;
-                }
-            }
-        } catch (Exception e) {
-        } finally {
-            fechar(psIte, rsIte);
-        }
+        return info;
+    }
 
-        return BigDecimal.ZERO;
+    private BigDecimal obterCustoVariavelProduto(Connection conn, BigDecimal codProd, BigDecimal nuNota) {
+        return obterCustoEMargemProduto(conn, codProd, nuNota).cusVar;
     }
 
     private BigDecimal obterMargemPadraoProduto(Connection conn, BigDecimal codProd, BigDecimal nuNota) {
