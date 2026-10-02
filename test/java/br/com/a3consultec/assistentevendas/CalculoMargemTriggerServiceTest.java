@@ -116,6 +116,43 @@ public class CalculoMargemTriggerServiceTest {
         assertNull(dto.getCustoVariavel());
     }
 
+    @Test
+    public void testCalculoMargemRealTriggerCenarioScreenshotUnitrama() {
+        // Dados reais do screenshot da Unitrama:
+        // Produto: ACM UNIBOND 3mm (Vlr. unitário: 370.98, IPI: 3.25%, CustoVar: 114.30)
+        // Preço com IPI = 383.04. Margem esperada: 70.16%
+        BigDecimal vlrUnitBase = new BigDecimal("370.98");
+        BigDecimal aliqIpi = new BigDecimal("3.25");
+        BigDecimal cusVar = new BigDecimal("114.30");
+
+        BigDecimal margemCalculada = service.calcularMargemRealTrigger(contextoPadrao, vlrUnitBase, cusVar, aliqIpi);
+        assertEquals(new BigDecimal("70.16"), margemCalculada);
+
+        // Fator K derivado para o frontend (bidirecionalidade 100% perfeita):
+        BigDecimal fatorK = vlrUnitBase.multiply(BigDecimal.ONE.subtract(margemCalculada.divide(CalculoMargemTriggerService.CEM, 6, RoundingMode.HALF_UP))).setScale(4, RoundingMode.HALF_UP);
+        assertEquals(new BigDecimal("110.7004"), fatorK);
+
+        // A partir do preço 370.98, deve retornar exatamente 70.16%
+        BigDecimal margemDoPreco = service.calcularMargemDePreco(fatorK, vlrUnitBase);
+        assertEquals(new BigDecimal("70.16"), margemDoPreco);
+
+        // Se o vendedor altera o preço para 400.00, margem sobe para 72.32%
+        BigDecimal margem400 = service.calcularMargemDePreco(fatorK, new BigDecimal("400.00"));
+        assertEquals(new BigDecimal("72.32"), margem400);
+    }
+
+    @Test
+    public void testCalculoMargemRealTriggerSemIpi() {
+        CalculoMargemTriggerService.NotaFiscalContexto ctxSemIpi = new CalculoMargemTriggerService.NotaFiscalContexto();
+        ctxSemIpi.clienteTemIpi = false;
+
+        BigDecimal vlrUnitBase = new BigDecimal("100.00");
+        BigDecimal cusVar = new BigDecimal("60.00");
+
+        BigDecimal margem = service.calcularMargemRealTrigger(ctxSemIpi, vlrUnitBase, cusVar, BigDecimal.ZERO);
+        assertEquals(new BigDecimal("40.00"), margem);
+    }
+
     @Test(expected = IllegalArgumentException.class)
     public void testMargemInvalidaCemPorcento() {
         service.calcularPrecoDeMargem(new BigDecimal("100"), new BigDecimal("100"));

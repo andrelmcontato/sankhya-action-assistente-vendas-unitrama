@@ -14,6 +14,8 @@ public class CalculoMargemTriggerService {
 
     public static class NotaFiscalContexto {
         public BigDecimal nuNota;
+        public BigDecimal codEmp = BigDecimal.ONE;
+        public java.util.Date dtNeg;
         public BigDecimal percDescCabecalho = BigDecimal.ZERO;
         public String usaDescEspecial = "N";
         public BigDecimal percDescParceiro = BigDecimal.ZERO;
@@ -107,6 +109,40 @@ public class CalculoMargemTriggerService {
             return BigDecimal.ZERO;
         }
         return fatorK.divide(umMenosM, 2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Calcula a Margem Real de Lucro (%) correspondente ao Preço de Venda Unitário,
+     * simulando a execução exata da trigger TRG_INC_UPD_TGFITE_MRG.sql no ERP Sankhya.
+     * Receita = (P_VLRTOT_SIMULADO - (P_VLRTOT_SIMULADO * P_PERCDESC) + P_VLRIPI)
+     * Margem = ((Receita - Custo) / Receita) * 100
+     */
+    public BigDecimal calcularMargemRealTrigger(NotaFiscalContexto ctx, BigDecimal vlrUnitBase, BigDecimal cusVar, BigDecimal aliqIpi) {
+        if (vlrUnitBase == null || vlrUnitBase.compareTo(BigDecimal.ZERO) <= 0
+                || cusVar == null || cusVar.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO;
+        }
+
+        BigDecimal fSim = calcularFatorSimulado(ctx);
+        BigDecimal vlrTotSimulado = vlrUnitBase.multiply(fSim);
+
+        BigDecimal percDesc = ctx.percDescCabecalho != null ? ctx.percDescCabecalho : BigDecimal.ZERO;
+        BigDecimal descontoCabecalho = vlrTotSimulado.multiply(percDesc);
+
+        BigDecimal vlrIpiUnit = BigDecimal.ZERO;
+        boolean incideIpi = ctx.clienteTemIpi && !ctx.isClienteSuframa && ctx.topRecalculaIpi && aliqIpi != null && aliqIpi.compareTo(BigDecimal.ZERO) > 0;
+        if (incideIpi) {
+            vlrIpiUnit = vlrUnitBase.multiply(aliqIpi).divide(CEM, 4, RoundingMode.HALF_UP);
+        }
+
+        BigDecimal receitaSimuladaComIpi = vlrTotSimulado.subtract(descontoCabecalho).add(vlrIpiUnit);
+
+        if (receitaSimuladaComIpi.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO;
+        }
+
+        BigDecimal lucro = receitaSimuladaComIpi.subtract(cusVar);
+        return lucro.divide(receitaSimuladaComIpi, 6, RoundingMode.HALF_UP).multiply(CEM).setScale(2, RoundingMode.HALF_UP);
     }
 
     /**
