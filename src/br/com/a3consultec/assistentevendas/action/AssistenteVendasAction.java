@@ -268,7 +268,7 @@ public class AssistenteVendasAction implements AcaoRotinaJava {
         // 4. Exibir via ServiceContext status 2 (padrão de produção comprovado do VinculaFinanceiro)
         String html = construtor.builPopUp();
         MessageUtils.showInfo(html);
-        System.out.println("[AssistenteVendas v2.0] PopUp montado (" + html.length() + " bytes) com " + response.getSugestoes().size() + " sugestões para Pedido #" + nuNota);
+        System.out.println("[AssistenteVendas Unitrama v1.0.7] PopUp montado (" + html.length() + " bytes) com " + response.getSugestoes().size() + " sugestões para Pedido #" + nuNota);
     }
 
     private InputStream getResourceStream(String path) {

@@ -4,7 +4,9 @@ import br.com.a3consultec.assistentevendas.model.AssistenteResponseDTO;
 import br.com.a3consultec.assistentevendas.model.SugestaoProdutoDTO;
 import br.com.sankhya.jape.EntityFacade;
 import br.com.sankhya.jape.dao.JdbcWrapper;
+import br.com.sankhya.jape.sql.NativeSql;
 import br.com.sankhya.modelcore.util.EntityFacadeFactory;
+import com.sankhya.util.JdbcUtils;
 
 import br.com.a3consultec.assistentevendas.util.AssistenteConfig;
 
@@ -13,6 +15,7 @@ import java.math.RoundingMode;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -83,8 +86,8 @@ public class AssistenteVendasService {
             }
 
             // 5. Enriquecer com Margem Real da Tabela, FatorK e IPI da Unitrama (Sigilo Estrito de Custo)
-            enriquecerComMargemEPreco(conn, ctxNota, response.getSugestoes());
-            enriquecerComMargemEPreco(conn, ctxNota, response.getItensFrequentes());
+            enriquecerComMargemEPreco(jdbc, conn, ctxNota, response.getSugestoes());
+            enriquecerComMargemEPreco(jdbc, conn, ctxNota, response.getItensFrequentes());
 
             response.setSucesso(true);
             response.setMensagem("Sugestões carregadas com sucesso.");
@@ -491,20 +494,55 @@ public class AssistenteVendasService {
         return ctx;
     }
 
-    private void enriquecerComMargemEPreco(Connection conn, CalculoMargemTriggerService.NotaFiscalContexto ctx, List<SugestaoProdutoDTO> sugestoes) {
+    private void enriquecerComMargemEPreco(JdbcWrapper jdbc, Connection conn, CalculoMargemTriggerService.NotaFiscalContexto ctx, List<SugestaoProdutoDTO> sugestoes) {
         if (sugestoes == null || sugestoes.isEmpty()) return;
 
         for (SugestaoProdutoDTO sug : sugestoes) {
             BigDecimal aliqIpi = obterAliquotaIpiProduto(conn, sug.getCodProd());
             BigDecimal codLocal = obterCodLocalProduto(conn, sug.getCodProd(), ctx.codEmp, ctx.nuNota);
-            BigDecimal cusVar = obterCustoVariavelProduto(conn, sug.getCodProd(), ctx.codEmp, codLocal, ctx.dtNeg);
 
-            BigDecimal fatorK = BigDecimal.ZERO;
+            BigDecimal cusVar = BigDecimal.ZERO;
             BigDecimal margem = BigDecimal.ZERO;
 
+            // Prioridade 0: Se o produto já estiver na nota atual (TGFITE), obtém custo e margem reais já calculados pela trigger/sistema
+            if (ctx.nuNota != null && ctx.nuNota.compareTo(BigDecimal.ZERO) > 0) {
+                NativeSql sqlIteAtual = new NativeSql(jdbc);
+                ResultSet rsIteAtual = null;
+                try {
+                    sqlIteAtual.appendSql("SELECT NVL(ITE.AD_CUSVARIAVEL, 0) AS CUSVAR, NVL(ITE.AD_MARGEMITEM, 0) AS MARGEM, NVL(ITE.CODLOCALORIG, 0) AS CODLOCAL ");
+                    sqlIteAtual.appendSql("FROM TGFITE ITE ");
+                    sqlIteAtual.appendSql("WHERE ITE.NUNOTA = :NUNOTA AND ITE.CODPROD = :CODPROD AND (ITE.AD_CUSVARIAVEL > 0 OR ITE.AD_MARGEMITEM > 0) ");
+                    sqlIteAtual.appendSql("ORDER BY ITE.SEQUENCIA DESC");
+                    sqlIteAtual.setNamedParameter("NUNOTA", ctx.nuNota);
+                    sqlIteAtual.setNamedParameter("CODPROD", sug.getCodProd());
+                    rsIteAtual = sqlIteAtual.executeQuery();
+                    if (rsIteAtual.next()) {
+                        BigDecimal cv = rsIteAtual.getBigDecimal("CUSVAR");
+                        BigDecimal mg = rsIteAtual.getBigDecimal("MARGEM");
+                        BigDecimal cl = rsIteAtual.getBigDecimal("CODLOCAL");
+                        if (cl != null && cl.compareTo(BigDecimal.ZERO) > 0) codLocal = cl;
+                        if (cv != null && cv.compareTo(BigDecimal.ZERO) > 0) cusVar = cv;
+                        if (mg != null && mg.compareTo(BigDecimal.ZERO) > 0) margem = mg;
+                    }
+                } catch (Exception ignored) {
+                } finally {
+                    JdbcUtils.closeResultSet(rsIteAtual);
+                    NativeSql.releaseResources(sqlIteAtual);
+                }
+            }
+
+            // Se o custo não foi obtido do item atual da nota, obtém dinamicamente via OBTEMCUSTO_EDT / fallbacks
+            if (cusVar.compareTo(BigDecimal.ZERO) <= 0) {
+                cusVar = obterCustoVariavelProduto(jdbc, sug.getCodProd(), ctx.codEmp, codLocal, ctx.dtNeg);
+            }
+
+            BigDecimal fatorK = BigDecimal.ZERO;
+
             if (cusVar != null && cusVar.compareTo(BigDecimal.ZERO) > 0) {
-                // Simulação matemática exata da trigger TRG_INC_UPD_TGFITE_MRG a partir do Custo Variável oficial da Unitrama
-                margem = calculoMargemService.calcularMargemRealTrigger(ctx, sug.getVlrVenda(), cusVar, aliqIpi);
+                // Se a margem ainda não foi carregada do item do pedido, calcula a margem real correspondente via trigger da Unitrama
+                if (margem.compareTo(BigDecimal.ZERO) <= 0) {
+                    margem = calculoMargemService.calcularMargemRealTrigger(ctx, sug.getVlrVenda(), cusVar, aliqIpi);
+                }
                 if (sug.getVlrVenda() != null && sug.getVlrVenda().compareTo(BigDecimal.ZERO) > 0 && margem.compareTo(BigDecimal.ZERO) > 0) {
                     BigDecimal umMenosMargem = BigDecimal.ONE.subtract(margem.divide(CalculoMargemTriggerService.CEM, 6, RoundingMode.HALF_UP));
                     fatorK = sug.getVlrVenda().multiply(umMenosMargem).setScale(4, RoundingMode.HALF_UP);
@@ -529,6 +567,15 @@ public class AssistenteVendasService {
             sug.setFatorK(fatorK);
             sug.setMargemSugerida(margem);
             sug.setCustoVariavel(null); // SIGILO COMERCIAL ESTRITO
+
+            System.out.println("[AssistenteVendas Unitrama v1.0.7] NUNOTA=" + ctx.nuNota
+                    + " | Prod=" + sug.getCodProd()
+                    + " | CodLocal=" + codLocal
+                    + " | VlrVenda=" + sug.getVlrVenda()
+                    + " | AliqIPI=" + aliqIpi
+                    + " | CusVar=" + cusVar
+                    + " | Margem=" + margem
+                    + " | FatorK=" + fatorK);
         }
     }
 
@@ -641,25 +688,34 @@ public class AssistenteVendasService {
         return BigDecimal.ZERO;
     }
 
-    private BigDecimal obterCustoVariavelProduto(Connection conn, BigDecimal codProd, BigDecimal codEmp, BigDecimal codLocal, java.util.Date dtNeg) {
+    private BigDecimal obterCustoVariavelProduto(JdbcWrapper jdbc, BigDecimal codProd, BigDecimal codEmp, BigDecimal codLocal, Object dtNeg) {
         if (codProd == null) return BigDecimal.ZERO;
         if (codEmp == null) codEmp = BigDecimal.ONE;
         if (codLocal == null) codLocal = BigDecimal.ZERO;
-        java.sql.Date dataNeg = dtNeg != null ? new java.sql.Date(dtNeg.getTime()) : new java.sql.Date(System.currentTimeMillis());
+        Object dataNeg = dtNeg != null ? dtNeg : new Timestamp(System.currentTimeMillis());
 
-        // 1. Função oficial do ERP Sankhya: OBTEMCUSTO_EDT (idêntica a ActionRecalculoIPIMargem e TRG_INC_UPD_TGFITE_MRG)
-        String sqlEdt = "SELECT NVL(OBTEMCUSTO_EDT(?, GET_TSIPAR_LOGICO('CUSTOPOREMP'), ?, "
-                      + "       GET_TSIPAR_LOGICO('CUSTOPORLOC'), ?, GET_TSIPAR_LOGICO('CUSTOPORCONT'), "
-                      + "       ' ', ?, 2), 0) AS CUSVAR FROM DUAL";
-        PreparedStatement psEdt = null;
+        // 1. Função oficial do ERP Sankhya: OBTEMCUSTO_EDT via NativeSql (idêntica a ActionRecalculoIPIMargem e TRG_INC_UPD_TGFITE_MRG)
+        NativeSql sqlEdt = new NativeSql(jdbc);
         ResultSet rsEdt = null;
         try {
-            psEdt = conn.prepareStatement(sqlEdt);
-            psEdt.setBigDecimal(1, codProd);
-            psEdt.setBigDecimal(2, codEmp);
-            psEdt.setBigDecimal(3, codLocal);
-            psEdt.setDate(4, dataNeg);
-            rsEdt = psEdt.executeQuery();
+            sqlEdt.appendSql("SELECT NVL(OBTEMCUSTO_EDT(");
+            sqlEdt.appendSql("  :CODPROD, ");
+            sqlEdt.appendSql("  GET_TSIPAR_LOGICO('CUSTOPOREMP'), ");
+            sqlEdt.appendSql("  :CODEMP, ");
+            sqlEdt.appendSql("  GET_TSIPAR_LOGICO('CUSTOPORLOC'), ");
+            sqlEdt.appendSql("  :CODLOCAL, ");
+            sqlEdt.appendSql("  GET_TSIPAR_LOGICO('CUSTOPORCONT'), ");
+            sqlEdt.appendSql("  :CONTROLE, ");
+            sqlEdt.appendSql("  :DTNEG, ");
+            sqlEdt.appendSql("  2), 0) AS CUSVAR FROM DUAL");
+
+            sqlEdt.setNamedParameter("CODPROD", codProd);
+            sqlEdt.setNamedParameter("CODEMP", codEmp);
+            sqlEdt.setNamedParameter("CODLOCAL", codLocal);
+            sqlEdt.setNamedParameter("CONTROLE", " ");
+            sqlEdt.setNamedParameter("DTNEG", dataNeg);
+
+            rsEdt = sqlEdt.executeQuery();
             if (rsEdt.next()) {
                 BigDecimal cv = rsEdt.getBigDecimal("CUSVAR");
                 if (cv != null && cv.compareTo(BigDecimal.ZERO) > 0) {
@@ -667,114 +723,152 @@ public class AssistenteVendasService {
                 }
             }
         } catch (Exception e) {
-            System.err.println("[AssistenteVendas Unitrama] Aviso OBTEMCUSTO_EDT para prod " + codProd + ": " + e.getMessage());
+            System.err.println("[AssistenteVendas Unitrama v1.0.7] Aviso OBTEMCUSTO_EDT para prod " + codProd + " local " + codLocal + ": " + e.getMessage());
         } finally {
-            fechar(psEdt, rsEdt);
+            JdbcUtils.closeResultSet(rsEdt);
+            NativeSql.releaseResources(sqlEdt);
         }
 
         // 2. Se OBTEMCUSTO_EDT com codLocal retornou 0 e codLocal > 0, tenta com codLocal = 0
         if (codLocal.compareTo(BigDecimal.ZERO) > 0) {
+            NativeSql sqlEdtZero = new NativeSql(jdbc);
+            ResultSet rsEdtZero = null;
             try {
-                psEdt = conn.prepareStatement(sqlEdt);
-                psEdt.setBigDecimal(1, codProd);
-                psEdt.setBigDecimal(2, codEmp);
-                psEdt.setBigDecimal(3, BigDecimal.ZERO);
-                psEdt.setDate(4, dataNeg);
-                rsEdt = psEdt.executeQuery();
-                if (rsEdt.next()) {
-                    BigDecimal cv = rsEdt.getBigDecimal("CUSVAR");
+                sqlEdtZero.appendSql("SELECT NVL(OBTEMCUSTO_EDT(");
+                sqlEdtZero.appendSql("  :CODPROD, ");
+                sqlEdtZero.appendSql("  GET_TSIPAR_LOGICO('CUSTOPOREMP'), ");
+                sqlEdtZero.appendSql("  :CODEMP, ");
+                sqlEdtZero.appendSql("  GET_TSIPAR_LOGICO('CUSTOPORLOC'), ");
+                sqlEdtZero.appendSql("  0, ");
+                sqlEdtZero.appendSql("  GET_TSIPAR_LOGICO('CUSTOPORCONT'), ");
+                sqlEdtZero.appendSql("  ' ', ");
+                sqlEdtZero.appendSql("  :DTNEG, ");
+                sqlEdtZero.appendSql("  2), 0) AS CUSVAR FROM DUAL");
+
+                sqlEdtZero.setNamedParameter("CODPROD", codProd);
+                sqlEdtZero.setNamedParameter("CODEMP", codEmp);
+                sqlEdtZero.setNamedParameter("DTNEG", dataNeg);
+
+                rsEdtZero = sqlEdtZero.executeQuery();
+                if (rsEdtZero.next()) {
+                    BigDecimal cv = rsEdtZero.getBigDecimal("CUSVAR");
                     if (cv != null && cv.compareTo(BigDecimal.ZERO) > 0) {
                         return cv;
                     }
                 }
             } catch (Exception ignored) {
             } finally {
-                fechar(psEdt, rsEdt);
+                JdbcUtils.closeResultSet(rsEdtZero);
+                NativeSql.releaseResources(sqlEdtZero);
             }
         }
 
-        // 3. Fallback TGFCUS por codLocal específico
-        if (codLocal.compareTo(BigDecimal.ZERO) > 0) {
-            String sqlCusLocal = "SELECT CUSVARIAVEL FROM ("
-                               + "  SELECT CUSVARIAVEL FROM TGFCUS "
-                               + "  WHERE CODPROD = ? AND CODEMP = ? AND CODLOCAL = ? AND CUSVARIAVEL > 0 "
-                               + "  ORDER BY DTATUAL DESC"
-                               + ") WHERE ROWNUM = 1";
-            PreparedStatement psCl = null;
-            ResultSet rsCl = null;
-            try {
-                psCl = conn.prepareStatement(sqlCusLocal);
-                psCl.setBigDecimal(1, codProd);
-                psCl.setBigDecimal(2, codEmp);
-                psCl.setBigDecimal(3, codLocal);
-                rsCl = psCl.executeQuery();
-                if (rsCl.next()) {
-                    BigDecimal cv = rsCl.getBigDecimal("CUSVARIAVEL");
-                    if (cv != null && cv.compareTo(BigDecimal.ZERO) > 0) {
-                        return cv;
-                    }
-                }
-            } catch (Exception ignored) {
-            } finally {
-                fechar(psCl, rsCl);
-            }
-        }
-
-        // 4. Fallback TGFCUS geral por empresa
-        String sqlCusEmp = "SELECT CUSVARIAVEL FROM ("
-                         + "  SELECT CUSVARIAVEL FROM TGFCUS "
-                         + "  WHERE CODPROD = ? AND CODEMP = ? AND CUSVARIAVEL > 0 "
-                         + "  ORDER BY DTATUAL DESC"
-                         + ") WHERE ROWNUM = 1";
-        PreparedStatement psCe = null;
-        ResultSet rsCe = null;
+        // 3. Fallback TGFCUS filtrando DTATUAL <= :DTNEG e priorizando CODLOCAL (Padrão Oficial Sankhya PrecoCustoHelper)
+        NativeSql sqlCus = new NativeSql(jdbc);
+        ResultSet rsCus = null;
         try {
-            psCe = conn.prepareStatement(sqlCusEmp);
-            psCe.setBigDecimal(1, codProd);
-            psCe.setBigDecimal(2, codEmp);
-            rsCe = psCe.executeQuery();
-            if (rsCe.next()) {
-                BigDecimal cv = rsCe.getBigDecimal("CUSVARIAVEL");
+            sqlCus.appendSql("SELECT CUSVARIAVEL FROM (");
+            sqlCus.appendSql("  SELECT CUSVARIAVEL, CODLOCAL FROM TGFCUS ");
+            sqlCus.appendSql("  WHERE CODPROD = :CODPROD AND CODEMP = :CODEMP ");
+            sqlCus.appendSql("    AND (:CODLOCAL = 0 OR CODLOCAL = :CODLOCAL OR CODLOCAL = 0) ");
+            sqlCus.appendSql("    AND (DTATUAL <= :DTNEG OR :DTNEG IS NULL) ");
+            sqlCus.appendSql("    AND CUSVARIAVEL > 0 ");
+            sqlCus.appendSql("  ORDER BY (CASE WHEN :CODLOCAL > 0 AND CODLOCAL = :CODLOCAL THEN 0 WHEN CODLOCAL = 0 THEN 1 ELSE 2 END), DTATUAL DESC");
+            sqlCus.appendSql(") WHERE ROWNUM = 1");
+
+            sqlCus.setNamedParameter("CODPROD", codProd);
+            sqlCus.setNamedParameter("CODEMP", codEmp);
+            sqlCus.setNamedParameter("CODLOCAL", codLocal);
+            sqlCus.setNamedParameter("DTNEG", dataNeg);
+
+            rsCus = sqlCus.executeQuery();
+            if (rsCus.next()) {
+                BigDecimal cv = rsCus.getBigDecimal("CUSVARIAVEL");
                 if (cv != null && cv.compareTo(BigDecimal.ZERO) > 0) {
                     return cv;
                 }
             }
         } catch (Exception ignored) {
         } finally {
-            fechar(psCe, rsCe);
+            JdbcUtils.closeResultSet(rsCus);
+            NativeSql.releaseResources(sqlCus);
         }
 
-        // 5. Fallback CUSREP / CUSMED
-        String sqlRepMed = "SELECT COALESCE(CUSREP, CUSMED, 0) AS CUS_ALT FROM ("
-                         + "  SELECT CUSREP, CUSMED FROM TGFCUS "
-                         + "  WHERE CODPROD = ? AND CODEMP = ? AND (CUSREP > 0 OR CUSMED > 0) "
-                         + "  ORDER BY DTATUAL DESC"
-                         + ") WHERE ROWNUM = 1";
-        PreparedStatement psRep = null;
-        ResultSet rsRep = null;
+        // 4. Fallback histórico de TGFITE da empresa até a data do pedido (DTNEG <= :DTNEG)
+        NativeSql sqlIte = new NativeSql(jdbc);
+        ResultSet rsIte = null;
         try {
-            psRep = conn.prepareStatement(sqlRepMed);
-            psRep.setBigDecimal(1, codProd);
-            psRep.setBigDecimal(2, codEmp);
-            rsRep = psRep.executeQuery();
-            if (rsRep.next()) {
-                BigDecimal cv = rsRep.getBigDecimal("CUS_ALT");
+            sqlIte.appendSql("SELECT AD_CUSVARIAVEL FROM (");
+            sqlIte.appendSql("  SELECT ITE.AD_CUSVARIAVEL, ITE.CODLOCALORIG ");
+            sqlIte.appendSql("  FROM TGFITE ITE ");
+            sqlIte.appendSql("  INNER JOIN TGFCAB CAB ON CAB.NUNOTA = ITE.NUNOTA ");
+            sqlIte.appendSql("  WHERE ITE.CODPROD = :CODPROD AND CAB.CODEMP = :CODEMP ");
+            sqlIte.appendSql("    AND (:CODLOCAL = 0 OR ITE.CODLOCALORIG = :CODLOCAL OR ITE.CODLOCALORIG = 0) ");
+            sqlIte.appendSql("    AND ITE.AD_CUSVARIAVEL > 0 ");
+            sqlIte.appendSql("    AND (CAB.DTNEG <= :DTNEG OR :DTNEG IS NULL) ");
+            sqlIte.appendSql("  ORDER BY (CASE WHEN :CODLOCAL > 0 AND ITE.CODLOCALORIG = :CODLOCAL THEN 0 WHEN ITE.CODLOCALORIG = 0 THEN 1 ELSE 2 END), CAB.DTNEG DESC, ITE.NUNOTA DESC");
+            sqlIte.appendSql(") WHERE ROWNUM = 1");
+
+            sqlIte.setNamedParameter("CODPROD", codProd);
+            sqlIte.setNamedParameter("CODEMP", codEmp);
+            sqlIte.setNamedParameter("CODLOCAL", codLocal);
+            sqlIte.setNamedParameter("DTNEG", dataNeg);
+
+            rsIte = sqlIte.executeQuery();
+            if (rsIte.next()) {
+                BigDecimal cv = rsIte.getBigDecimal("AD_CUSVARIAVEL");
                 if (cv != null && cv.compareTo(BigDecimal.ZERO) > 0) {
                     return cv;
                 }
             }
         } catch (Exception ignored) {
         } finally {
-            fechar(psRep, rsRep);
+            JdbcUtils.closeResultSet(rsIte);
+            NativeSql.releaseResources(sqlIte);
+        }
+
+        // 5. Fallback TGFCUS sem trava de data
+        NativeSql sqlCusAny = new NativeSql(jdbc);
+        ResultSet rsCusAny = null;
+        try {
+            sqlCusAny.appendSql("SELECT CUSVARIAVEL FROM (");
+            sqlCusAny.appendSql("  SELECT CUSVARIAVEL, CODLOCAL FROM TGFCUS ");
+            sqlCusAny.appendSql("  WHERE CODPROD = :CODPROD AND CODEMP = :CODEMP ");
+            sqlCusAny.appendSql("    AND (:CODLOCAL = 0 OR CODLOCAL = :CODLOCAL OR CODLOCAL = 0) ");
+            sqlCusAny.appendSql("    AND CUSVARIAVEL > 0 ");
+            sqlCusAny.appendSql("  ORDER BY (CASE WHEN :CODLOCAL > 0 AND CODLOCAL = :CODLOCAL THEN 0 WHEN CODLOCAL = 0 THEN 1 ELSE 2 END), DTATUAL DESC");
+            sqlCusAny.appendSql(") WHERE ROWNUM = 1");
+
+            sqlCusAny.setNamedParameter("CODPROD", codProd);
+            sqlCusAny.setNamedParameter("CODEMP", codEmp);
+            sqlCusAny.setNamedParameter("CODLOCAL", codLocal);
+
+            rsCusAny = sqlCusAny.executeQuery();
+            if (rsCusAny.next()) {
+                BigDecimal cv = rsCusAny.getBigDecimal("CUSVARIAVEL");
+                if (cv != null && cv.compareTo(BigDecimal.ZERO) > 0) {
+                    return cv;
+                }
+            }
+        } catch (Exception ignored) {
+        } finally {
+            JdbcUtils.closeResultSet(rsCusAny);
+            NativeSql.releaseResources(sqlCusAny);
         }
 
         return BigDecimal.ZERO;
     }
 
     private BigDecimal obterCustoVariavelProduto(Connection conn, BigDecimal codProd, BigDecimal nuNota) {
-        CalculoMargemTriggerService.NotaFiscalContexto ctx = carregarContextoNota(conn, nuNota);
-        BigDecimal codLocal = obterCodLocalProduto(conn, codProd, ctx.codEmp, nuNota);
-        return obterCustoVariavelProduto(conn, codProd, ctx.codEmp, codLocal, ctx.dtNeg);
+        JdbcWrapper jdbc = null;
+        try {
+            jdbc = EntityFacadeFactory.getDWFFacade().getJdbcWrapper();
+            CalculoMargemTriggerService.NotaFiscalContexto ctx = carregarContextoNota(conn, nuNota);
+            BigDecimal codLocal = obterCodLocalProduto(conn, codProd, ctx.codEmp, nuNota);
+            return obterCustoVariavelProduto(jdbc, codProd, ctx.codEmp, codLocal, ctx.dtNeg);
+        } catch (Exception e) {
+            return BigDecimal.ZERO;
+        }
     }
 
     private BigDecimal obterMargemPadraoProduto(Connection conn, BigDecimal codProd, BigDecimal nuNota) {
